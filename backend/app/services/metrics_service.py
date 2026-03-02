@@ -29,12 +29,41 @@ class MetricsService:
             
             if "up" in text:
                 uptime_part = text.split("up")[1].split(",")[0].strip()
-                # Dummy conversion for now
                 uptime_seconds = 3600
         except:
             pass
             
         return uptime_seconds, load_avg
+
+    @staticmethod
+    def parse_legacy_interface_counters(text: str):
+        """Parse counters from 'show interfaces counters' text output."""
+        counters = []
+        try:
+            lines = text.splitlines()
+            # Find start of table (usually looks like Header | Header | ...)
+            start_index = -1
+            for i, line in enumerate(lines):
+                if "Interface" in line and "Rx" in line:
+                    start_index = i + 2 # Skip header and separator
+                    break
+            
+            if start_index != -1:
+                for line in lines[start_index:]:
+                    if not line.strip(): continue
+                    parts = line.split()
+                    if len(parts) >= 5:
+                        # Standard VyOS counters: Interface | Rx Packets | Rx Bytes | Tx Packets | Tx Bytes
+                        counters.append({
+                            "ifname": parts[0],
+                            "rx_packets": int(parts[1].replace(',', '')),
+                            "rx_bytes": int(parts[2].replace(',', '')),
+                            "tx_packets": int(parts[3].replace(',', '')),
+                            "tx_bytes": int(parts[4].replace(',', ''))
+                        })
+        except:
+            pass
+        return counters
 
     @staticmethod
     async def collect_metrics_by_id(router_id: int):
@@ -58,24 +87,19 @@ class MetricsService:
                              message=f"Router {router.name} is now {new_status}", alert_type="status_change"))
 
             if is_online:
-                # ── Data Collection ──────────────────────────────────────────
                 iface_data, bgp_data = {}, {}
                 cpu_usage, memory_usage, uptime = 0.0, 0.0, 0
                 load_avg = {"1m": 0.0, "5m": 0.0, "15m": 0.0}
 
-                # 1. Interfaces (REST)
+                # 1. Config (REST)
                 try:
                     res = await client.get_interface_config()
                     if res.get("success"): iface_data = res.get("data", {})
-                except: pass
-
-                # 2. BGP (REST)
-                try:
                     res = await client.get_bgp_config()
                     if res.get("success"): bgp_data = res.get("data", {})
                 except: pass
 
-                # 3. System Metrics (GraphQL Primary)
+                # 2. System Metrics
                 sys_info = None
                 try:
                     sys_info = await client.get_system_info()
@@ -90,26 +114,36 @@ class MetricsService:
                         memory_usage = round(mem.get("used", 0) / mem.get("total") * 100, 1)
                     uptime = int(sys_info.get("uptime", 0))
                 else:
-                    # Legacy Fallback
                     try:
                         up_text = await client.get_legacy_system_stats()
                         uptime, load_avg = MetricsService.parse_legacy_uptime(up_text)
                         cpu_usage = load_avg["1m"]
                     except: pass
 
-                # 4. Interface Counters (GraphQL)
+                # 3. Interface Counters
+                counters = None
                 try:
-                    counters = await client.get_interface_counters()
-                    if isinstance(counters, list):
-                        for c in counters:
-                            ifname = c.get("ifname")
-                            for _, ifaces in iface_data.items():
-                                if isinstance(ifaces, dict) and ifname in ifaces:
-                                    ifaces[ifname].update({"rx-bytes": c.get("rx_bytes", 0), "tx-bytes": c.get("tx_bytes", 0),
-                                                           "rx-packets": c.get("rx_packets", 0), "tx-packets": c.get("tx_packets", 0)})
+                    counters = await client.get_interface_counters() # GraphQL
                 except: pass
 
-                # ── Save Metrics ──────────────────────────────────────────────
+                if not counters:
+                    try:
+                        counter_text = await client.get_legacy_interface_counters() # CLI
+                        counters = MetricsService.parse_legacy_interface_counters(counter_text)
+                    except: pass
+
+                if isinstance(counters, list):
+                    for c in counters:
+                        ifname = c.get("ifname")
+                        for _, ifaces in iface_data.items():
+                            if isinstance(ifaces, dict) and ifname in ifaces:
+                                ifaces[ifname].update({
+                                    "rx-bytes": c.get("rx_bytes", 0), 
+                                    "tx-bytes": c.get("tx_bytes", 0),
+                                    "rx-packets": c.get("rx_packets", 0), 
+                                    "tx-packets": c.get("tx_packets", 0)
+                                })
+
                 metrics = RouterMetrics(
                     router_id=router.id,
                     interfaces=iface_data,

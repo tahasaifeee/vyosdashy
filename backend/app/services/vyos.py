@@ -172,6 +172,10 @@ class VyOSClient:
         """Fetch interface statistics via CLI text."""
         return await self.show_text(["interfaces"])
 
+    async def get_legacy_interface_counters(self) -> str:
+        """Fetch interface counters via CLI text."""
+        return await self.show_text(["interfaces", "counters"])
+
     # ── Advanced Insights (Phase 3) ──────────────────────────────────────────
 
     async def get_routing_table(self) -> Optional[List[Dict[str, Any]]]:
