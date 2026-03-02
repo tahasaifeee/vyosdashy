@@ -235,6 +235,34 @@ async def ping_from_router(
     output = await client.ping(host, count)
     return {"output": output}
 
+@router.post("/{id}/config/timezone")
+async def update_router_timezone(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    id: int,
+    timezone: str = Body(..., embed=True),
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Update the system timezone on the VyOS router.
+    """
+    result = await db.execute(select(Router).where(Router.id == id))
+    router_obj = result.scalars().first()
+    if not router_obj:
+        raise HTTPException(status_code=404, detail="Router not found")
+
+    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
+    
+    # 1. Set config
+    res_set = await client.set_config(["system", "time-zone", timezone])
+    if not res_set.get("success"):
+        raise HTTPException(status_code=400, detail=f"Failed to set timezone: {res_set.get('error') or res_set.get('data')}")
+    
+    # 2. Save config
+    res_save = await client.save()
+    
+    return {"success": True, "message": f"Timezone updated to {timezone}"}
+
 @router.delete("/{id}", response_model=RouterSchema)
 
 async def delete_router(

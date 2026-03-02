@@ -11,7 +11,7 @@ import {
   Database, Zap, Clock, Maximize2, Layers, Monitor, HardDriveDownload, HardDriveUpload,
   List, Terminal, Search, ChevronDown, ChevronUp, Download, Settings2, Check,
   LayoutDashboard, FileText, ActivitySquare, Shield, Menu, X as CloseIcon,
-  Play
+  Play, Save, Globe2
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { DashboardSkeleton } from '@/components/Skeleton';
@@ -74,6 +74,14 @@ function formatUptime(seconds: number) {
   return `${m}m`;
 }
 
+const COMMON_TIMEZONES = [
+  "UTC", "Africa/Abidjan", "Africa/Accra", "Africa/Addis_Ababa", "Africa/Algiers", "Africa/Asmara", "Africa/Bamako", "Africa/Bangui",
+  "America/New_York", "America/Chicago", "America/Denver", "America/Los_Angeles", "America/Toronto", "America/Vancouver", "America/Mexico_City",
+  "Asia/Dubai", "Asia/Hong_Kong", "Asia/Jakarta", "Asia/Kolkata", "Asia/Seoul", "Asia/Singapore", "Asia/Tokyo", "Asia/Shanghai",
+  "Europe/London", "Europe/Paris", "Europe/Berlin", "Europe/Rome", "Europe/Madrid", "Europe/Amsterdam", "Europe/Zurich", "Europe/Istanbul",
+  "Australia/Sydney", "Australia/Melbourne", "Australia/Perth", "Pacific/Auckland"
+];
+
 // ─── Component ───────────────────────────────────────────────────────────────
 
 export default function RouterDashboard() {
@@ -102,6 +110,10 @@ export default function RouterDashboard() {
   const [pingOutput, setPingOutput] = useState('');
   const [pingLoading, setPingLoading] = useState(false);
 
+  // Configuration State
+  const [newTimezone, setNewTimezone] = useState('');
+  const [configLoading, setConfigLoading] = useState(false);
+
   // Customization State
   const [showSettings, setShowSettings] = useState(false);
   const [widgets, setWidgets] = useState({
@@ -127,6 +139,9 @@ export default function RouterDashboard() {
       if (configRes.data) {
         setRouterConfig(configRes.data.config || {});
         setVyosInfo(configRes.data.info || {});
+        if (configRes.data.config?.system?.['time-zone']) {
+          setNewTimezone(configRes.data.config.system['time-zone']);
+        }
       }
       setLastUpdated(new Date());
 
@@ -156,7 +171,7 @@ export default function RouterDashboard() {
   };
 
   const fetchTabData = async () => {
-    if (activeTab === 'dashboard') return;
+    if (activeTab === 'dashboard' || activeTab === 'settings') return;
     setLoadingTab(true);
     try {
       if (activeTab === 'routes') {
@@ -195,6 +210,20 @@ export default function RouterDashboard() {
       setPingOutput(err.response?.data?.detail || 'Ping failed.');
     } finally {
       setPingLoading(false);
+    }
+  };
+
+  const handleUpdateTimezone = async () => {
+    if (!newTimezone) return;
+    setConfigLoading(true);
+    try {
+      await api.post(`/routers/${id}/config/timezone`, { timezone: newTimezone });
+      alert(`Timezone successfully updated to ${newTimezone}`);
+      fetchData();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || 'Failed to update timezone.');
+    } finally {
+      setConfigLoading(false);
     }
   };
 
@@ -346,10 +375,10 @@ export default function RouterDashboard() {
                     label="System Logs" 
                   />
                   <SidebarItem 
-                    active={false} 
-                    onClick={() => {}} 
+                    active={activeTab === 'settings'} 
+                    onClick={() => setActiveTab('settings')} 
                     icon={<Settings2 className="w-4 h-4" />} 
-                    label="Configuration" 
+                    label="General Settings" 
                   />
                 </div>
               </div>
@@ -645,6 +674,49 @@ export default function RouterDashboard() {
                         </div>
                       </div>
                     )}
+                    {activeTab === 'settings' && (
+                      <div className="max-w-2xl space-y-8 animate-in fade-in duration-500">
+                        {/* Timezone Config */}
+                        <div className="bg-white dark:bg-white/5 p-8 rounded-3xl border border-slate-200 dark:border-white/10 shadow-sm">
+                          <div className="flex items-center gap-4 mb-8">
+                            <div className="bg-primary/20 p-3 rounded-2xl">
+                              <Globe2 className="w-6 h-6 text-primary" />
+                            </div>
+                            <div>
+                              <h4 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">System Timezone</h4>
+                              <p className="text-xs font-medium text-slate-500">Configure the local time for system logs and scheduling.</p>
+                            </div>
+                          </div>
+
+                          <div className="space-y-6">
+                            <div className="space-y-2">
+                              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Select Region</label>
+                              <select 
+                                className="w-full bg-slate-100 dark:bg-dark-900/50 border border-slate-200 dark:border-white/5 rounded-xl py-3.5 px-4 outline-none focus:ring-2 focus:ring-primary transition-all text-sm font-bold text-slate-700 dark:text-slate-200 appearance-none"
+                                value={newTimezone}
+                                onChange={(e) => setNewTimezone(e.target.value)}
+                              >
+                                <option value="" disabled>Choose a timezone...</option>
+                                {COMMON_TIMEZONES.map(tz => (
+                                  <option key={tz} value={tz}>{tz}</option>
+                                ))}
+                              </select>
+                            </div>
+
+                            <button 
+                              onClick={handleUpdateTimezone}
+                              disabled={configLoading || !newTimezone}
+                              className="w-full btn-primary py-4 flex items-center justify-center gap-3 font-black uppercase tracking-widest text-sm"
+                            >
+                              {configLoading ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Save className="w-4 h-4" />}
+                              Commit & Save Changes
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Additional system settings can be added here */}
+                      </div>
+                    )}
                   </div>
                 )}
               </DashboardCard>
@@ -666,7 +738,7 @@ export default function RouterDashboard() {
                   <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] md:text-xs mt-1">{selectedInterface.type} Physical Interface</p>
                 </div>
               </div>
-              <button onClick={() => setSelectedInterface(null)} className="p-2 hover:bg-slate-200 dark:hover:bg-white/5 rounded-xl transition-colors text-slate-500 hover:text-slate-900 dark:hover:text-white"><XCircle className="w-6 h-6" /></button>
+              <button onClick={() => setSelectedInterface(null)} className="p-2 hover:bg-slate-200 dark:hover:bg-white/5 rounded-xl transition-colors text-slate-500 hover:text-slate-900 dark:hover:white"><XCircle className="w-6 h-6" /></button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
               <div className="space-y-4">
