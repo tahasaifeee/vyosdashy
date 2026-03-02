@@ -172,8 +172,25 @@ update_app() {
         return
     fi
 
+    # Migration: if backend/.env is still tracked by git, preserve local settings
+    # and remove it from the index so git pull can proceed cleanly.
+    if git ls-files --error-unmatch backend/.env >/dev/null 2>&1; then
+        echo "Note: Migrating backend/.env to untracked (preserving your settings)..."
+        cp backend/.env /tmp/vyos_backend_env_backup
+        git checkout -- backend/.env   # reset to committed version (clears local changes)
+        git rm --cached backend/.env   # remove from index
+        echo "backend/.env" >> .gitignore
+    fi
+
     echo "Pulling latest changes from repository..."
     git pull
+
+    # Restore backend/.env after pull (pull may have deleted it when untracking it)
+    if [ -f /tmp/vyos_backend_env_backup ]; then
+        cp /tmp/vyos_backend_env_backup backend/.env
+        rm -f /tmp/vyos_backend_env_backup
+        echo "Backend configuration restored."
+    fi
 
     if [ -n "$DOCKER_COMPOSE_CMD" ]; then
         echo "Rebuilding and restarting containers..."
