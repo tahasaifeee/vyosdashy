@@ -61,6 +61,18 @@ class VyOSClient:
         Returns structured JSON — the primary way to read VyOS data via REST."""
         return await self._post_form("retrieve", {"op": "showConfig", "path": path})
 
+    async def get_info(self) -> Dict[str, Any]:
+        """GET /info — public endpoint (no auth). Returns version, hostname, banner."""
+        try:
+            async with httpx.AsyncClient(verify=self.verify, timeout=5.0) as client:
+                response = await client.get(f"{self.base_url}/info")
+                response.raise_for_status()
+                result = response.json()
+                # /info wraps payload under "data" key
+                return {"success": True, "data": result.get("data", result)}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
     async def test_connection(self) -> Dict[str, Any]:
         """Test API connectivity and key validity."""
         res = await self.get_config(["system", "host-name"])

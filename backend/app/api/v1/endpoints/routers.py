@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any, List
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, status
@@ -8,6 +9,7 @@ from app.api import deps
 from app.models.router import Router
 from app.models.user import User
 from app.schemas.router import Router as RouterSchema, RouterCreate, RouterUpdate
+from app.services.vyos import VyOSClient
 
 router = APIRouter()
 
@@ -103,16 +105,20 @@ async def test_router_connection(
     if not router:
         raise HTTPException(status_code=404, detail="Router not found")
     
-    from app.services.vyos import VyOSClient
     client = VyOSClient(hostname=router.hostname, api_key=router.api_key)
-    test_res = await client.test_connection()
+    test_res, info_res = await asyncio.gather(
+        client.test_connection(),
+        client.get_info(),
+    )
     is_online = test_res.get("success") is True
-    
-    # Update status in DB
+
     from app.models.router import RouterStatus
-    router.status = RouterStatus.ONLINE if is_online else RouterStatus.OFFLINE
+    from datetime import timezone
     import datetime
-    router.last_seen = datetime.datetime.now()
+    router.status = RouterStatus.ONLINE if is_online else RouterStatus.OFFLINE
+    router.last_seen = datetime.datetime.now(timezone.utc)
+    if info_res.get("success") and info_res.get("data"):
+        router.version = info_res["data"].get("version")
     
     db.add(router)
     await db.commit()
@@ -124,6 +130,33 @@ async def test_router_connection(
         "is_online": is_online,
         "error": test_res.get("error")
     }
+
+@router.get("/{id}/config")
+async def get_router_config(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    id: int,
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Fetch live VyOS full configuration and system info for the dashboard.
+    Returns: { config: {...}, info: { version, hostname, banner } }
+    """
+    result = await db.execute(select(Router).where(Router.id == id))
+    router_obj = result.scalars().first()
+    if not router_obj:
+        raise HTTPException(status_code=404, detail="Router not found")
+
+    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
+    config_res, info_res = await asyncio.gather(
+        client.get_config([]),
+        client.get_info(),
+    )
+    return {
+        "config": config_res.get("data") if config_res.get("success") else {},
+        "info": info_res.get("data") if info_res.get("success") else {},
+    }
+
 
 @router.delete("/{id}", response_model=RouterSchema)
 async def delete_router(
