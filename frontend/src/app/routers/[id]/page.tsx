@@ -15,18 +15,41 @@ export default function RouterDashboard() {
   const [metrics, setMetrics] = useState<any[]>([]);
   const [latest, setLatest] = useState<any>(null);
   const [routerInfo, setRouterInfo] = useState<any>(null);
+  const [cardStats, setCardStats] = useState({ cpu: '...', mem: '...', rx: '...', tx: '...' });
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
   const fetchData = async () => {
     try {
+      console.log('Fetching data for router:', id);
       const [infoRes, latestRes, historyRes] = await Promise.all([
-        api.get(`/routers/${id}`),
-        api.get(`/metrics/${id}/latest`),
-        api.get(`/metrics/${id}/history?limit=30`)
+        api.get(`/routers/${id}`).catch(e => { console.error('Info API Error:', e); throw e; }),
+        api.get(`/metrics/${id}/latest`).catch(e => { console.error('Latest Metrics API Error:', e); throw e; }),
+        api.get(`/metrics/${id}/history?limit=30`).catch(e => { console.error('History Metrics API Error:', e); throw e; })
       ]);
+      const latestData = latestRes.data;
       setRouterInfo(infoRes.data);
-      setLatest(latestRes.data);
+      setLatest(latestData);
+
+      // Extract stats for cards
+      let totalRx = 0;
+      let totalTx = 0;
+      if (latestData?.interfaces) {
+        Object.values(latestData.interfaces).forEach((types: any) => {
+          Object.values(types).forEach((iface: any) => {
+            if (iface.stats) {
+              totalRx += parseInt(iface.stats.rx_bytes) || 0;
+              totalTx += parseInt(iface.stats.tx_bytes) || 0;
+            }
+          });
+        });
+      }
+      setCardStats({
+        cpu: latestData?.cpu_usage ? `${latestData.cpu_usage}%` : 'N/A',
+        mem: latestData?.memory_usage ? `${latestData.memory_usage}%` : 'N/A',
+        rx: formatBytes(totalRx),
+        tx: formatBytes(totalTx)
+      });
       
       if (Array.isArray(historyRes.data)) {
         setMetrics(historyRes.data.map((m: any) => {
@@ -145,10 +168,10 @@ export default function RouterDashboard() {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <StatCard icon={<Cpu className="text-blue-500" />} label="CPU Usage" value="12%" sub="System load" />
-          <StatCard icon={<Activity className="text-emerald-500" />} label="Memory" value="2.4 GB" sub="of 4 GB" />
-          <StatCard icon={<ArrowDown className="text-blue-600" />} label="Download" value="45.2 Mbps" sub="Current RX" />
-          <StatCard icon={<ArrowUp className="text-purple-600" />} label="Upload" value="12.8 Mbps" sub="Current TX" />
+          <StatCard icon={<Cpu className="text-blue-500" />} label="CPU Usage" value={cardStats.cpu} sub="System load" />
+          <StatCard icon={<Activity className="text-emerald-500" />} label="Memory" value={cardStats.mem} sub="Usage %" />
+          <StatCard icon={<ArrowDown className="text-blue-600" />} label="Total RX" value={cardStats.rx} sub="All interfaces" />
+          <StatCard icon={<ArrowUp className="text-purple-600" />} label="Total TX" value={cardStats.tx} sub="All interfaces" />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

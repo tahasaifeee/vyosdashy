@@ -35,26 +35,15 @@ app = FastAPI(
 )
 
 # Set all CORS enabled origins
-if settings.BACKEND_CORS_ORIGINS:
-    origins = settings.BACKEND_CORS_ORIGINS
-    if isinstance(origins, str):
-        origins = [origins]
-    
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=[str(origin).rstrip("/") for origin in origins],
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-else:
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],
-        allow_credentials=False,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+# We use allow_origins=["*"] and allow_credentials=False because we use Bearer tokens in headers,
+# which works with wildcards and doesn't require the 'Credentials' flag.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=False,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
