@@ -62,6 +62,11 @@ generate_secret_key() {
     echo "temporary-secret-key-$(date +%s)"
 }
 
+# Get public IP
+get_public_ip() {
+    curl -s https://ipinfo.io/ip || curl -s https://api.ipify.org || echo "localhost"
+}
+
 # Ensure basic dependencies are present
 install_if_missing curl
 install_if_missing git
@@ -92,6 +97,11 @@ create_admin_user() {
 reconfigure() {
     echo ""
     echo "--- Reconfiguration ---"
+    
+    # Try to guess the external API URL
+    PUBLIC_IP=$(get_public_ip)
+    DEFAULT_API_URL="http://${PUBLIC_IP}:8000"
+
     echo "Please provide the following information (press Enter for defaults):"
 
     prompt_user "Project Name [VyOS UI Manager]: " "VyOS UI Manager" PROJECT_NAME
@@ -103,12 +113,12 @@ reconfigure() {
     GENERATED_KEY=$(generate_secret_key)
     prompt_user "Secret Key (press Enter to use generated): " "$GENERATED_KEY" SECRET_KEY
     prompt_user "Backend CORS Origins [http://localhost:3000,http://localhost:8000]: " "http://localhost:3000,http://localhost:8000" BACKEND_CORS_ORIGINS
-    prompt_user "Next Public API URL [http://localhost:8000]: " "http://localhost:8000" NEXT_PUBLIC_API_URL
+    prompt_user "Next Public API URL [${DEFAULT_API_URL}]: " "$DEFAULT_API_URL" NEXT_PUBLIC_API_URL
     prompt_user "Redis URL [redis://redis:6379/0]: " "redis://redis:6379/0" REDIS_URL
 
     DATABASE_URL="postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_SERVER}:5432/${POSTGRES_DB}"
 
-    # Generate .env file without single quotes around values to avoid Docker parsing issues
+    # Generate .env file
     cat << EOF > .env
 # Project Settings
 PROJECT_NAME=${PROJECT_NAME}
@@ -133,9 +143,9 @@ EOF
     echo ".env files updated."
     
     if [ -n "$DOCKER_COMPOSE_CMD" ]; then
-        prompt_user "Restart containers to apply changes? (y/N): " "n" restart
+        prompt_user "Rebuild and restart containers to apply changes? (y/N): " "n" restart
         if [[ "$restart" =~ ^[Yy]$ ]]; then
-            $DOCKER_COMPOSE_CMD up -d
+            $DOCKER_COMPOSE_CMD up -d --build
         fi
         create_admin_user
     fi
