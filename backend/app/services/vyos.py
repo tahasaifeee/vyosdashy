@@ -210,8 +210,13 @@ class VyOSClient:
         return lines[-50:]
 
     async def get_active_connections(self) -> Optional[str]:
-        """Fetch active system connections via plain text."""
-        return await self.show_text(["conntrack", "statistics"])
+        """Fetch active system connections (the conntrack table)."""
+        # Try to get the actual flow table first
+        res = await self.show_text(["conntrack", "table", "ipv4"])
+        if res.startswith("Error:"):
+            # Fallback to statistics if table is too large or command fails
+            return await self.show_text(["conntrack", "statistics"])
+        return res
 
     async def ping(self, host: str, count: int = 4) -> str:
         """Run ping command from the router to a target host."""
