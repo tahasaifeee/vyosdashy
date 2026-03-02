@@ -9,7 +9,8 @@ import {
   Network, Globe, Lock, Radio, GitBranch, HardDrive,
   CheckCircle2, XCircle, Route, Wifi, TerminalSquare, RefreshCw, ChevronLeft,
   Database, Zap, Clock, Maximize2, Layers, Monitor, HardDriveDownload, HardDriveUpload,
-  List, Terminal, Search, ChevronDown, ChevronUp, Download, Settings2, Check
+  List, Terminal, Search, ChevronDown, ChevronUp, Download, Settings2, Check,
+  LayoutDashboard, FileText, ActivitySquare, Shield, Menu, X as CloseIcon
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { DashboardSkeleton } from '@/components/Skeleton';
@@ -87,13 +88,13 @@ export default function RouterDashboard() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [selectedInterface, setSelectedInterface] = useState<any>(null);
   
-  // Tab & Collapsible State
+  // Tab & UI State
   const [activeTab, setActiveTab] = useState('dashboard');
   const [routingTable, setRoutingTable] = useState<any[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
   const [conntrack, setConntrack] = useState<string>('');
   const [loadingTab, setLoadingTab] = useState(false);
-  const [isHardwareContextCollapsed, setIsHardwareContextCollapsed] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // Customization State
   const [showSettings, setShowSettings] = useState(false);
@@ -256,451 +257,461 @@ export default function RouterDashboard() {
   );
 
   return (
-    <div className="min-h-screen pt-24 pb-12 px-6 lg:px-12 bg-background transition-colors duration-300">
+    <div className="min-h-screen bg-background transition-colors duration-300 flex flex-col">
       <Navbar />
-      <div className="max-w-7xl mx-auto space-y-8">
-        
-        {/* ── NOC Header ── */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
-          <div className="space-y-4">
-            <button onClick={() => router.push('/routers')} className="flex items-center gap-2 text-slate-500 hover:text-primary transition-colors text-xs font-bold uppercase tracking-[0.2em] hover:-translate-x-1 duration-300">
-              <ChevronLeft className="w-4 h-4" /> System Registry
-            </button>
-            <div className="flex items-center gap-6">
-              <h1 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter transition-colors">{routerInfo?.name}</h1>
-              <div className="h-10 w-px bg-slate-200 dark:bg-white/10 hidden md:block" />
-              <div className="hidden md:flex flex-col">
-                <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Global Status</span>
-                <span className={`text-sm font-bold flex items-center gap-2 ${routerInfo?.status === 'online' ? 'text-success' : 'text-danger'}`}>
-                  <div className={`w-2 h-2 rounded-full ${routerInfo?.status === 'online' ? 'bg-success shadow-glow' : 'bg-danger'}`} />
-                  {routerInfo?.status?.toUpperCase()}
-                </span>
+      
+      <div className="flex flex-1 pt-16">
+        {/* ── SonicWall-style Left Sidebar ── */}
+        <aside className={`fixed lg:static inset-y-0 left-0 z-30 w-64 bg-white dark:bg-dark-900 border-r border-slate-200 dark:border-white/5 transition-transform duration-300 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0 overflow-y-auto custom-scrollbar`}>
+          <div className="p-6">
+            <div className="flex items-center justify-between lg:hidden mb-6">
+              <span className="font-black text-primary uppercase tracking-widest text-xs">Menu</span>
+              <button onClick={() => setIsSidebarOpen(false)}><CloseIcon className="w-5 h-5 text-slate-500" /></button>
+            </div>
+
+            <div className="space-y-8">
+              {/* Category: Monitor */}
+              <div>
+                <SidebarCategory label="Monitor" />
+                <div className="mt-2 space-y-1">
+                  <SidebarItem 
+                    active={activeTab === 'dashboard'} 
+                    onClick={() => setActiveTab('dashboard')} 
+                    icon={<LayoutDashboard className="w-4 h-4" />} 
+                    label="Dashboard" 
+                  />
+                  <SidebarItem 
+                    active={activeTab === 'conntrack'} 
+                    onClick={() => setActiveTab('conntrack')} 
+                    icon={<ActivitySquare className="w-4 h-4" />} 
+                    label="Live Connections" 
+                  />
+                </div>
+              </div>
+
+              {/* Category: Network */}
+              <div>
+                <SidebarCategory label="Network" />
+                <div className="mt-2 space-y-1">
+                  <SidebarItem 
+                    active={activeTab === 'routes'} 
+                    onClick={() => setActiveTab('routes')} 
+                    icon={<Route className="w-4 h-4" />} 
+                    label="Routing Table" 
+                  />
+                  <SidebarItem 
+                    active={false} 
+                    onClick={() => {}} 
+                    icon={<Network className="w-4 h-4" />} 
+                    label="Interfaces" 
+                  />
+                  <SidebarItem 
+                    active={false} 
+                    onClick={() => {}} 
+                    icon={<GitBranch className="w-4 h-4" />} 
+                    label="BGP Peers" 
+                  />
+                </div>
+              </div>
+
+              {/* Category: System */}
+              <div>
+                <SidebarCategory label="System" />
+                <div className="mt-2 space-y-1">
+                  <SidebarItem 
+                    active={activeTab === 'logs'} 
+                    onClick={() => setActiveTab('logs')} 
+                    icon={<FileText className="w-4 h-4" />} 
+                    label="System Logs" 
+                  />
+                  <SidebarItem 
+                    active={false} 
+                    onClick={() => {}} 
+                    icon={<Settings2 className="w-4 h-4" />} 
+                    label="Configuration" 
+                  />
+                </div>
+              </div>
+
+              {/* Category: Security */}
+              <div>
+                <SidebarCategory label="Security" />
+                <div className="mt-2 space-y-1">
+                  <SidebarItem 
+                    active={false} 
+                    onClick={() => {}} 
+                    icon={<Shield className="w-4 h-4" />} 
+                    label="Firewall Rules" 
+                  />
+                  <SidebarItem 
+                    active={false} 
+                    onClick={() => {}} 
+                    icon={<Lock className="w-4 h-4" />} 
+                    label="VPN Tunnels" 
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Hardware Context in Sidebar */}
+            <div className="mt-12 pt-8 border-t border-slate-200 dark:border-white/5">
+              <h4 className="text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mb-4">Router Info</h4>
+              <div className="space-y-3">
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-slate-500">Hostname</span>
+                  <span className="text-xs font-black text-slate-900 dark:text-slate-300 truncate">{vyosInfo?.hostname || routerInfo?.hostname}</span>
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-bold text-slate-500">OS Version</span>
+                  <span className="text-xs font-black text-primary truncate">{vyosInfo?.version || 'N/A'}</span>
+                </div>
               </div>
             </div>
           </div>
+        </aside>
 
-          <div className="flex items-center gap-4 bg-white/80 dark:bg-dark-800/80 backdrop-blur-md p-3 rounded-2xl border border-slate-200 dark:border-white/5 shadow-xl dark:shadow-2xl transition-colors">
-            <div className="flex flex-col items-end px-4 border-r border-slate-200 dark:border-white/5">
-              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Active Runtime</span>
-              <span className="text-sm font-black text-slate-900 dark:text-white">{formatUptime(latest?.uptime || 0)}</span>
-            </div>
-            <div className="flex flex-col items-end px-4">
-              <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Sessions</span>
-              <span className="text-sm font-black text-primary">
-                <AnimatedNumber value={latest?.active_sessions || 0} />
-              </span>
-            </div>
-            <button onClick={fetchData} className="p-3 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl transition-all active:scale-95 group">
-              <RefreshCw className="w-4 h-4 group-active:rotate-180 transition-transform duration-500" />
-            </button>
-          </div>
-        </div>
-
-        {/* ── Tab Navigation & Customization ── */}
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-wrap gap-2 p-1 bg-white dark:bg-white/5 w-fit rounded-2xl border border-slate-200 dark:border-white/5 shadow-sm transition-colors">
-            <TabButton active={activeTab === 'dashboard'} onClick={() => setActiveTab('dashboard')} icon={<Activity className="w-4 h-4" />} label="Dashboard" />
-            <TabButton active={activeTab === 'routes'} onClick={() => setActiveTab('routes')} icon={<Route className="w-4 h-4" />} label="Routing Table" />
-            <TabButton active={activeTab === 'logs'} onClick={() => setActiveTab('logs')} icon={<Terminal className="w-4 h-4" />} label="System Logs" />
-            <TabButton active={activeTab === 'conntrack'} onClick={() => setActiveTab('conntrack')} icon={<Monitor className="w-4 h-4" />} label="Connections" />
-          </div>
-
-          {activeTab === 'dashboard' && (
-            <div className="relative">
-              <button 
-                onClick={() => setShowSettings(!showSettings)}
-                className="flex items-center gap-2 px-4 py-2 bg-white/50 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 rounded-xl text-xs font-bold text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-white/10 transition-all shadow-sm"
-              >
-                <Settings2 className="w-4 h-4" /> Customise Layout
-              </button>
-              
-              {showSettings && (
-                <div className="absolute right-0 mt-2 w-56 glass-modal p-4 shadow-2xl z-20 animate-in fade-in slide-in-from-top-2">
-                  <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-3 pb-2 border-b border-slate-200 dark:border-white/10">Visible Widgets</h4>
-                  <div className="space-y-2">
-                    {Object.entries(widgets).map(([key, isVisible]) => (
-                      <button 
-                        key={key} 
-                        onClick={() => toggleWidget(key as keyof typeof widgets)}
-                        className="flex items-center justify-between w-full p-2 hover:bg-slate-100 dark:hover:bg-white/5 rounded-lg transition-colors group"
-                      >
-                        <span className="text-xs font-bold text-slate-700 dark:text-slate-300 capitalize">{key}</span>
-                        <div className={`w-4 h-4 rounded border flex items-center justify-center transition-colors ${isVisible ? 'bg-primary border-primary text-white' : 'border-slate-300 dark:border-slate-600'}`}>
-                          {isVisible && <Check className="w-3 h-3" />}
-                        </div>
-                      </button>
-                    ))}
+        {/* ── Main Content Area ── */}
+        <main className="flex-1 overflow-y-auto p-6 lg:p-10 transition-all duration-300">
+          <div className="max-w-7xl mx-auto space-y-8">
+            
+            {/* Header with Breadcrumbs & Actions */}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-slate-500 text-[10px] font-black uppercase tracking-widest">
+                  <button onClick={() => router.push('/routers')} className="hover:text-primary transition-colors">Registry</button>
+                  <ChevronLeft className="w-3 h-3 rotate-180" />
+                  <span className="text-primary">{routerInfo?.name}</span>
+                  <ChevronLeft className="w-3 h-3 rotate-180" />
+                  <span className="text-slate-900 dark:text-slate-200 capitalize">{activeTab}</span>
+                </div>
+                
+                <div className="flex items-center gap-6">
+                  <div className="lg:hidden">
+                    <button onClick={() => setIsSidebarOpen(true)} className="p-2 bg-white dark:bg-white/5 rounded-xl border border-slate-200 dark:border-white/10 shadow-sm"><Menu className="w-5 h-5" /></button>
+                  </div>
+                  <h1 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-tighter transition-colors">{routerInfo?.name}</h1>
+                  <div className={`hidden md:flex status-badge ${routerInfo?.status === 'online' ? 'bg-success/10 text-success border-success/20' : 'bg-danger/10 text-danger border-danger/20'}`}>
+                    <div className={`w-1.5 h-1.5 rounded-full ${routerInfo?.status === 'online' ? 'bg-success animate-pulse' : 'bg-danger'}`} />
+                    {routerInfo?.status}
                   </div>
                 </div>
-              )}
-            </div>
-          )}
-        </div>
+              </div>
 
-        {activeTab === 'dashboard' ? (
-          <div className="animate-in fade-in duration-500">
-            {/* ── Summary Bar ── */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <SummaryCard 
-                label="Compute Load" 
-                value={<AnimatedNumber value={latest?.cpu_usage || 0} format={v => `${v}%`} />} 
-                subValue={`LA: ${latest?.load_average?.['1m'] || 0} / ${latest?.load_average?.['5m'] || 0}`}
-                icon={<Cpu className="w-5 h-5" />}
-                progress={latest?.cpu_usage || 0}
-                color="primary"
-              />
-              <SummaryCard 
-                label="Memory Resident" 
-                value={<AnimatedNumber value={latest?.memory_usage || 0} format={v => `${v}%`} />} 
-                subValue="ECC Protected"
-                icon={<Activity className="w-5 h-5" />}
-                progress={latest?.memory_usage || 0}
-                color="success"
-              />
-              <SummaryCard 
-                label="Interfaces" 
-                value={`${ifaceStats.up}/${ifaceStats.total}`} 
-                subValue="Links Operational"
-                icon={<Network className="w-5 h-5" />}
-                progress={(ifaceStats.up / ifaceStats.total) * 100}
-                color="info"
-              />
-              <SummaryCard 
-                label="Network Stack" 
-                value={<AnimatedNumber value={configStatus?.bgpPeers || 0} />} 
-                subValue="Active Peers"
-                icon={<GitBranch className="w-5 h-5" />}
-                progress={configStatus?.bgpPeers ? 100 : 0}
-                color="warning"
-              />
+              <div className="flex items-center gap-4 bg-white/80 dark:bg-dark-800/80 backdrop-blur-md p-3 rounded-2xl border border-slate-200 dark:border-white/5 shadow-xl dark:shadow-2xl transition-colors">
+                <div className="flex flex-col items-end px-4 border-r border-slate-200 dark:border-white/5">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Uptime</span>
+                  <span className="text-sm font-black text-slate-900 dark:text-white">{formatUptime(latest?.uptime || 0)}</span>
+                </div>
+                <div className="flex flex-col items-end px-4">
+                  <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest">Active API</span>
+                  <span className="text-sm font-black text-primary">Connected</span>
+                </div>
+                <button onClick={fetchData} className="p-3 bg-primary/10 text-primary hover:bg-primary/20 rounded-xl transition-all active:scale-95 group">
+                  <RefreshCw className="w-4 h-4 group-active:rotate-180 transition-transform duration-500" />
+                </button>
+              </div>
             </div>
 
-            {/* ── NOC Main Grid ── */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              
-              <div className="lg:col-span-2 space-y-8">
-                {/* Real-Time Traffic Visualization */}
-                {widgets.traffic && (
-                  <DashboardCard 
-                    title="Global Traffic Throughput (Mbps)" 
-                    headerAction={
-                      <div className="flex items-center gap-3">
-                        <button 
-                          onClick={handleExportCSV}
-                          className="flex items-center gap-1 px-3 py-1.5 bg-primary/10 text-primary hover:bg-primary/20 rounded-lg text-[10px] font-bold uppercase tracking-widest transition-colors"
-                        >
-                          <Download className="w-3 h-3" /> Export CSV
-                        </button>
-                        <div className="flex bg-slate-100 dark:bg-white/5 p-1 rounded-lg">
-                          {['30', '60', '100'].map(r => (
-                            <button 
-                              key={r}
-                              onClick={() => setTimeRange(r)}
-                              className={`px-3 py-1 text-[10px] font-bold rounded-md transition-colors ${timeRange === r ? 'bg-primary text-white shadow-glow' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'}`}
-                            >
-                              {r}pts
-                            </button>
-                          ))}
+            {activeTab === 'dashboard' ? (
+              <div className="animate-in fade-in duration-500">
+                {/* ── Summary Bar ── */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                  <SummaryCard 
+                    label="CPU Compute" 
+                    value={<AnimatedNumber value={latest?.cpu_usage || 0} format={v => `${v}%`} />} 
+                    subValue={`Load: ${latest?.load_average?.['1m'] || 0}`}
+                    icon={<Cpu className="w-5 h-5" />}
+                    progress={latest?.cpu_usage || 0}
+                    color="primary"
+                  />
+                  <SummaryCard 
+                    label="Memory Usage" 
+                    value={<AnimatedNumber value={latest?.memory_usage || 0} format={v => `${v}%`} />} 
+                    subValue="Available: 2.4GB"
+                    icon={<Activity className="w-5 h-5" />}
+                    progress={latest?.memory_usage || 0}
+                    color="success"
+                  />
+                  <SummaryCard 
+                    label="Links Status" 
+                    value={`${ifaceStats.up}/${ifaceStats.total}`} 
+                    subValue="Links Up"
+                    icon={<Network className="w-5 h-5" />}
+                    progress={(ifaceStats.up / ifaceStats.total) * 100}
+                    color="info"
+                  />
+                  <SidebarSummaryCard 
+                    label="BGP Peers" 
+                    value={<AnimatedNumber value={configStatus?.bgpPeers || 0} />} 
+                    subValue="Sessions Established"
+                    icon={<GitBranch className="w-5 h-5" />}
+                    color="warning"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                  <div className="lg:col-span-2 space-y-8">
+                    {/* Traffic Chart */}
+                    <DashboardCard 
+                      title="Throughput Monitor (Mbps)" 
+                      headerAction={
+                        <div className="flex items-center gap-2">
+                          <button onClick={handleExportCSV} className="p-2 text-slate-400 hover:text-primary transition-colors"><Download className="w-4 h-4" /></button>
+                          <div className="flex bg-slate-100 dark:bg-white/5 p-1 rounded-lg">
+                            {['30', '60', '100'].map(r => (
+                              <button key={r} onClick={() => setTimeRange(r)} className={`px-2 py-1 text-[9px] font-bold rounded-md transition-colors ${timeRange === r ? 'bg-primary text-white' : 'text-slate-500 hover:text-slate-900 dark:hover:text-slate-300'}`}>{r}pts</button>
+                            ))}
+                          </div>
                         </div>
+                      }
+                    >
+                      <div className="h-64 sm:h-80 mt-6">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart data={metrics}>
+                            <defs>
+                              <linearGradient id="colorRx" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.3}/><stop offset="95%" stopColor="#0ea5e9" stopOpacity={0}/></linearGradient>
+                              <linearGradient id="colorTx" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/><stop offset="95%" stopColor="#6366f1" stopOpacity={0}/></linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" className="dark:stroke-white/5" />
+                            <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} dy={10} />
+                            <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} />
+                            <Tooltip contentStyle={{ backgroundColor: 'var(--background)', borderRadius: '16px', border: '1px solid rgba(0,0,0,0.1)' }} />
+                            <Area name="Ingress (RX)" type="monotone" dataKey="rx" stroke="#0ea5e9" strokeWidth={3} fillOpacity={1} fill="url(#colorRx)" animationDuration={1500} />
+                            <Area name="Egress (TX)" type="monotone" dataKey="tx" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorTx)" animationDuration={1500} />
+                          </AreaChart>
+                        </ResponsiveContainer>
                       </div>
-                    }
-                  >
-                    <div className="h-64 sm:h-80 mt-6">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <AreaChart data={metrics}>
-                          <defs>
-                            <linearGradient id="colorRx" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#0ea5e9" stopOpacity={0.3}/>
-                              <stop offset="95%" stopColor="#0ea5e9" stopOpacity={0}/>
-                            </linearGradient>
-                            <linearGradient id="colorTx" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3}/>
-                              <stop offset="95%" stopColor="#6366f1" stopOpacity={0}/>
-                            </linearGradient>
-                          </defs>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(0,0,0,0.05)" className="dark:stroke-white/5" />
-                          <XAxis dataKey="time" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} dy={10} />
-                          <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b' }} />
-                          <Tooltip 
-                            contentStyle={{ backgroundColor: 'var(--background)', borderRadius: '16px', border: '1px solid rgba(0,0,0,0.1)', boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.5)' }}
-                            itemStyle={{ fontSize: '12px', fontWeight: 'bold' }}
-                          />
-                          <Legend verticalAlign="top" align="right" iconType="circle" wrapperStyle={{ fontSize: '10px', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: '0.1em', paddingBottom: '20px' }} />
-                          <Area name="Ingress (RX)" type="monotone" dataKey="rx" stroke="#0ea5e9" strokeWidth={3} fillOpacity={1} fill="url(#colorRx)" animationDuration={1500} />
-                          <Area name="Egress (TX)" type="monotone" dataKey="tx" stroke="#6366f1" strokeWidth={3} fillOpacity={1} fill="url(#colorTx)" animationDuration={1500} />
-                        </AreaChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </DashboardCard>
-                )}
+                    </DashboardCard>
 
-                {/* Interface Section Upgrade */}
-                {widgets.interfaces && (
-                  <DashboardCard title="Interface Logic Grid">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                      {interfacesList.map((iface) => {
-                        const state = iface.state || iface['oper-state'];
-                        return (
-                          <div 
-                            key={iface.name} 
-                            onClick={() => setSelectedInterface(iface)}
-                            className="glass-card p-4 flex items-center justify-between group cursor-pointer hover:border-primary/50"
-                          >
-                            <div className="flex items-center gap-4">
-                              <div className={`p-2.5 rounded-xl transition-colors ${state === 'up' ? 'bg-success/10 text-success' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}>
-                                <Network className="w-5 h-5" />
-                              </div>
-                              <div>
-                                <div className="font-black text-slate-900 dark:text-white group-hover:text-primary transition-colors">{iface.name}</div>
-                                <div className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">{iface.type}</div>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-6">
-                              <div className="hidden sm:flex flex-col items-end">
-                                <span className="text-[9px] font-black text-slate-500 uppercase">Traffic</span>
-                                <div className="flex gap-1 h-1 w-16 bg-slate-200 dark:bg-white/5 rounded-full mt-1 overflow-hidden">
-                                  <div className="h-full bg-info" style={{ width: '40%' }} />
-                                  <div className="h-full bg-primary" style={{ width: '25%' }} />
+                    {/* Interface Grid */}
+                    <DashboardCard title="Interface Status Matrix">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                        {interfacesList.map((iface) => {
+                          const state = iface.state || iface['oper-state'];
+                          return (
+                            <div key={iface.name} onClick={() => setSelectedInterface(iface)} className="glass-card p-4 flex items-center justify-between group cursor-pointer hover:border-primary/50">
+                              <div className="flex items-center gap-4">
+                                <div className={`p-2.5 rounded-xl ${state === 'up' ? 'bg-success/10 text-success' : 'bg-slate-200 dark:bg-slate-800 text-slate-500'}`}><Network className="w-5 h-5" /></div>
+                                <div>
+                                  <div className="font-black text-slate-900 dark:text-white group-hover:text-primary transition-colors">{iface.name}</div>
+                                  <div className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">{iface.type}</div>
                                 </div>
                               </div>
                               <div className={`w-2 h-2 rounded-full ${state === 'up' ? 'bg-success shadow-glow animate-pulse' : 'bg-slate-300 dark:bg-slate-700'}`} />
                             </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </DashboardCard>
-                )}
-              </div>
-
-              <div className="space-y-8">
-                {/* Protocol Status Panel */}
-                {widgets.protocols && (
-                  <DashboardCard title="Protocol Control Panel">
-                    <div className="space-y-3 mt-6">
-                      <ProtocolRow label="BGP Routing" active={configStatus?.bgp} detail={`${configStatus?.bgpPeers} Established`} />
-                      <ProtocolRow label="OSPF Area 0" active={configStatus?.ospf} detail={`${configStatus?.ospfNeighbors} Neighbors`} />
-                      <ProtocolRow label="IPv4 Firewall" active={configStatus?.firewall} detail={`${configStatus?.fwPolicies} active sets`} />
-                      <ProtocolRow label="WireGuard VPN" active={configStatus?.wireguard} detail={`${configStatus?.wgPeers} active tunnels`} />
-                    </div>
-                  </DashboardCard>
-                )}
-
-                {/* System Resources */}
-                {widgets.hardware && (
-                  <DashboardCard 
-                    title="Hardware Context" 
-                    isCollapsible 
-                    onToggle={() => setIsHardwareContextCollapsed(!isHardwareContextCollapsed)} 
-                    isCollapsed={isHardwareContextCollapsed}
-                  >
-                    <div className="space-y-4 mt-6">
-                      <ResourceRow label="Internal Hostname" value={vyosInfo?.hostname || '—'} />
-                      <ResourceRow label="Platform Build" value={vyosInfo?.version || 'N/A'} highlight />
-                      <ResourceRow label="Load Avg (1/5/15)" value={`${latest?.load_average?.['1m'] || 0} ${latest?.load_average?.['5m'] || 0} ${latest?.load_average?.['15m'] || 0}`} mono />
-                      <ResourceRow label="Management API" value="v1 (FastAPI)" />
-                    </div>
-                  </DashboardCard>
-                )}
-
-                {/* Quick Commands */}
-                {widgets.commands && (
-                  <div className="bg-primary/5 dark:bg-primary/10 border border-primary/20 rounded-3xl p-6 relative overflow-hidden group">
-                    <div className="absolute -right-4 -top-4 bg-primary/20 w-24 h-24 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700" />
-                    <h4 className="font-black text-slate-900 dark:text-white text-lg tracking-tighter mb-4 flex items-center gap-2">
-                      <TerminalSquare className="w-5 h-5 text-primary" /> Rapid Action
-                    </h4>
-                    <div className="grid grid-cols-2 gap-3">
-                      <ActionButton icon={<Route className="w-4 h-4" />} label="RIB" onClick={() => setActiveTab('routes')} />
-                      <ActionButton icon={<Monitor className="w-4 h-4" />} label="Logs" onClick={() => setActiveTab('logs')} />
-                      <ActionButton icon={<ShieldCheck className="w-4 h-4" />} label="FW" />
-                      <ActionButton icon={<Maximize2 className="w-4 h-4" />} label="SSH" />
-                    </div>
+                          );
+                        })}
+                      </div>
+                    </DashboardCard>
                   </div>
-                )}
 
-                {/* DHCP Pools */}
-                {widgets.dhcp && dhcpPools.length > 0 && (
-                  <DashboardCard title="DHCP Address Pools" isCollapsible>
-                    <div className="space-y-4 mt-6">
-                      {dhcpPools.map((p, i) => (
-                        <div key={i} className="bg-slate-100 dark:bg-white/5 p-3 rounded-xl border border-slate-200 dark:border-white/5 group hover:border-primary/30 transition-colors">
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="font-bold text-slate-900 dark:text-slate-200 text-sm group-hover:text-primary transition-colors">{p.name}</span>
-                            <div className="bg-info/10 text-info text-[9px] font-black px-2 py-0.5 rounded tracking-tighter">SUBNET</div>
-                          </div>
-                          <div className="font-mono text-xs text-slate-500 mb-2">{p.subnet}</div>
-                          {p.start && (
-                            <div className="flex items-center justify-between text-[10px] font-bold text-slate-400 border-t border-slate-200 dark:border-white/5 pt-2">
-                              <span>Range: {p.start} – {p.stop}</span>
-                            </div>
-                          )}
-                        </div>
-                      ))}
+                  <div className="space-y-8">
+                    {/* Protocols Panel */}
+                    <DashboardCard title="Protocol Control Center">
+                      <div className="space-y-3 mt-6">
+                        <ProtocolRow label="BGP Routing" active={configStatus?.bgp} detail={`${configStatus?.bgpPeers} Active`} />
+                        <ProtocolRow label="OSPF OSPFv2" active={configStatus?.ospf} detail={`${configStatus?.ospfNeighbors} Neighbors`} />
+                        <ProtocolRow label="IPv4 Firewall" active={configStatus?.firewall} detail={`${configStatus?.fwPolicies} Polices`} />
+                        <ProtocolRow label="WireGuard" active={configStatus?.wireguard} detail={`${configStatus?.wgPeers} Peers`} />
+                      </div>
+                    </DashboardCard>
+
+                    {/* Quick Actions */}
+                    <div className="bg-primary/5 dark:bg-primary/10 border border-primary/20 rounded-3xl p-6 relative overflow-hidden group">
+                      <div className="absolute -right-4 -top-4 bg-primary/20 w-24 h-24 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700" />
+                      <h4 className="font-black text-slate-900 dark:text-white text-lg tracking-tighter mb-4 flex items-center gap-2"><TerminalSquare className="w-5 h-5 text-primary" /> Rapid Control</h4>
+                      <div className="grid grid-cols-2 gap-3">
+                        <ActionButton icon={<Route className="w-4 h-4" />} label="RIB" onClick={() => setActiveTab('routes')} />
+                        <ActionButton icon={<Monitor className="w-4 h-4" />} label="Logs" onClick={() => setActiveTab('logs')} />
+                        <ActionButton icon={<ShieldCheck className="w-4 h-4" />} label="FW" />
+                        <ActionButton icon={<Maximize2 className="w-4 h-4" />} label="SSH" />
+                      </div>
                     </div>
-                  </DashboardCard>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <DashboardCard title={activeTab.toUpperCase()}>
-            {loadingTab ? (
-              <div className="flex flex-col items-center justify-center py-32 opacity-50">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
-                <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest">Querying Dataplane...</p>
+
+                    {/* DHCP Pools */}
+                    {dhcpPools.length > 0 && (
+                      <DashboardCard title="DHCP Address Pools" isCollapsible>
+                        <div className="space-y-4 mt-6">
+                          {dhcpPools.map((p, i) => (
+                            <div key={i} className="bg-slate-100 dark:bg-white/5 p-3 rounded-xl border border-slate-200 dark:border-white/5 group hover:border-primary/30 transition-colors">
+                              <div className="flex items-center justify-between mb-1">
+                                <span className="font-bold text-slate-900 dark:text-slate-200 text-sm group-hover:text-primary transition-colors">{p.name}</span>
+                                <div className="text-info text-[8px] font-black uppercase tracking-tighter">SUBNET</div>
+                              </div>
+                              <div className="font-mono text-xs text-slate-500">{p.subnet}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </DashboardCard>
+                    )}
+                  </div>
+                </div>
               </div>
             ) : (
-              <div className="mt-6 animate-in fade-in duration-500">
-                {activeTab === 'routes' && (
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr className="text-[10px] text-slate-500 uppercase font-black tracking-widest border-b border-slate-200 dark:border-white/5">
-                          <th className="pb-4">Proto</th>
-                          <th className="pb-4">Prefix</th>
-                          <th className="pb-4">Next Hop</th>
-                          <th className="pb-4">Interface</th>
-                          <th className="pb-4">Sel</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {routingTable.map((route, i) => (
-                          <tr key={i} className="border-b border-slate-100 dark:border-white/5 last:border-0 text-sm font-medium hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
-                            <td className="py-3 uppercase text-primary text-[10px] font-black">{route.protocol}</td>
-                            <td className="py-3 font-mono text-slate-900 dark:text-slate-200">{route.prefix}</td>
-                            <td className="py-3 font-mono text-slate-500 dark:text-slate-400">{route.next_hop?.next_hop || 'Direct'}</td>
-                            <td className="py-3 text-slate-500 dark:text-slate-400">{route.next_hop?.interface || '—'}</td>
-                            <td className="py-3">
-                              {route.selected ? <CheckCircle2 className="w-3.5 h-3.5 text-success" /> : <XCircle className="w-3.5 h-3.5 text-slate-300 dark:text-slate-700" />}
-                            </td>
-                          </tr>
+              <DashboardCard title={activeTab.toUpperCase()}>
+                {loadingTab ? (
+                  <div className="flex flex-col items-center justify-center py-32 opacity-50">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mb-4"></div>
+                    <p className="text-slate-500 dark:text-slate-400 text-xs font-bold uppercase tracking-widest">Querying Dataplane...</p>
+                  </div>
+                ) : (
+                  <div className="mt-6 animate-in fade-in duration-500">
+                    {activeTab === 'routes' && (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                          <thead>
+                            <tr className="text-[10px] text-slate-500 uppercase font-black tracking-widest border-b border-slate-200 dark:border-white/5">
+                              <th className="pb-4">Proto</th>
+                              <th className="pb-4">Prefix</th>
+                              <th className="pb-4">Next Hop</th>
+                              <th className="pb-4">Interface</th>
+                              <th className="pb-4">Sel</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {routingTable.map((route, i) => (
+                              <tr key={i} className="border-b border-slate-100 dark:border-white/5 last:border-0 text-sm font-medium hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                                <td className="py-3 uppercase text-primary text-[10px] font-black">{route.protocol}</td>
+                                <td className="py-3 font-mono text-slate-900 dark:text-slate-200">{route.prefix}</td>
+                                <td className="py-3 font-mono text-slate-500 dark:text-slate-400">{route.next_hop?.next_hop || 'Direct'}</td>
+                                <td className="py-3 text-slate-500 dark:text-slate-400">{route.next_hop?.interface || '—'}</td>
+                                <td className="py-3">{route.selected ? <CheckCircle2 className="w-3.5 h-3.5 text-success" /> : <XCircle className="w-3.5 h-3.5 text-slate-300 dark:text-slate-700" />}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    {activeTab === 'logs' && (
+                      <div className="bg-slate-100 dark:bg-dark-900/50 p-6 rounded-2xl border border-slate-200 dark:border-white/5 font-mono text-xs text-slate-700 dark:text-slate-300 space-y-1 overflow-y-auto max-h-[600px] leading-relaxed custom-scrollbar shadow-inner">
+                        {logs.map((log, i) => (
+                          <div key={i} className="flex gap-4 hover:bg-white dark:hover:bg-white/5 px-2 py-0.5 rounded transition-colors">
+                            <span className="text-slate-400 dark:text-slate-600 select-none">[{i+1}]</span>
+                            <span>{log}</span>
+                          </div>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-                {activeTab === 'logs' && (
-                  <div className="bg-slate-100 dark:bg-dark-900/50 p-6 rounded-2xl border border-slate-200 dark:border-white/5 font-mono text-xs text-slate-700 dark:text-slate-300 space-y-1 overflow-y-auto max-h-[600px] leading-relaxed custom-scrollbar shadow-inner">
-                    {logs.map((log, i) => (
-                      <div key={i} className="flex gap-4 hover:bg-white dark:hover:bg-white/5 px-2 py-0.5 rounded transition-colors">
-                        <span className="text-slate-400 dark:text-slate-600 select-none">[{i+1}]</span>
-                        <span>{log}</span>
                       </div>
-                    ))}
+                    )}
+                    {activeTab === 'conntrack' && (
+                      <pre className="bg-slate-100 dark:bg-dark-900/50 p-6 rounded-2xl border border-slate-200 dark:border-white/5 font-mono text-xs text-slate-700 dark:text-slate-300 overflow-x-auto whitespace-pre-wrap shadow-inner p-6">
+                        {conntrack || 'No connection statistics available.'}
+                      </pre>
+                    )}
                   </div>
                 )}
-                {activeTab === 'conntrack' && (
-                  <pre className="bg-slate-100 dark:bg-dark-900/50 p-6 rounded-2xl border border-slate-200 dark:border-white/5 font-mono text-xs text-slate-700 dark:text-slate-300 overflow-x-auto whitespace-pre-wrap shadow-inner">
-                    {conntrack || 'No connection statistics available.'}
-                  </pre>
-                )}
-              </div>
+              </DashboardCard>
             )}
-          </DashboardCard>
-        )}
-
-        {/* ── Interface Detail Modal ── */}
-        {selectedInterface && (
-          <div className="fixed inset-0 bg-slate-900/40 dark:bg-dark-900/90 backdrop-blur-md flex items-center justify-center p-6 z-50 animate-in fade-in">
-            <div className="glass-modal max-w-2xl w-full p-10 relative overflow-hidden animate-in zoom-in-95 duration-300">
-              <div className="absolute -right-10 -top-10 bg-primary/10 w-40 h-40 rounded-full blur-3xl" />
-              
-              <div className="flex justify-between items-start mb-10">
-                <div className="flex items-center gap-5">
-                  <div className="bg-primary/20 p-4 rounded-2xl">
-                    <Network className="w-8 h-8 text-primary shadow-glow" />
-                  </div>
-                  <div>
-                    <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight">{selectedInterface.name}</h2>
-                    <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] md:text-xs mt-1">{selectedInterface.type} Physical Interface</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setSelectedInterface(null)}
-                  className="p-2 hover:bg-slate-200 dark:hover:bg-white/5 rounded-xl transition-colors text-slate-500 hover:text-slate-900 dark:hover:text-white"
-                >
-                  <XCircle className="w-6 h-6" />
-                </button>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
-                <div className="space-y-4">
-                  <DetailRow label="IP Address" value={Array.isArray(selectedInterface.address) ? selectedInterface.address[0] : (selectedInterface.address || 'N/A')} mono />
-                  <DetailRow label="Hardware ID (MAC)" value={selectedInterface['hw-id'] || '—'} mono />
-                  <DetailRow label="MTU Size" value={selectedInterface.mtu || '1500'} />
-                  <DetailRow label="Admin State" value={selectedInterface.state || selectedInterface['oper-state']} highlight />
-                </div>
-                <div className="space-y-4">
-                  <div className="bg-slate-100 dark:bg-white/5 p-4 rounded-2xl border border-slate-200 dark:border-white/5">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-[10px] font-black text-slate-500 uppercase">Packet Analysis</span>
-                      <Layers className="w-3.5 h-3.5 text-primary" />
-                    </div>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-slate-500 dark:text-slate-400 font-medium">RX Packets</span>
-                        <span className="text-info font-black">
-                          <AnimatedNumber value={getIfaceRxPackets(selectedInterface)} />
-                        </span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-slate-500 dark:text-slate-400 font-medium">TX Packets</span>
-                        <span className="text-primary font-black">
-                          <AnimatedNumber value={getIfaceTxPackets(selectedInterface)} />
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="bg-info/10 p-4 rounded-2xl border border-info/20 text-center transition-transform hover:scale-105">
-                      <HardDriveDownload className="w-5 h-5 text-info mx-auto mb-2" />
-                      <div className="text-xs font-black text-slate-900 dark:text-white">{formatBytes(getIfaceRx(selectedInterface))}</div>
-                      <div className="text-[9px] font-bold text-slate-500 uppercase mt-1">Total Ingress</div>
-                    </div>
-                    <div className="bg-primary/10 p-4 rounded-2xl border border-primary/20 text-center transition-transform hover:scale-105">
-                      <HardDriveUpload className="w-5 h-5 text-primary mx-auto mb-2" />
-                      <div className="text-xs font-black text-slate-900 dark:text-white">{formatBytes(getIfaceTx(selectedInterface))}</div>
-                      <div className="text-[9px] font-bold text-slate-500 uppercase mt-1">Total Egress</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <button 
-                onClick={() => setSelectedInterface(null)}
-                className="w-full btn-primary py-4 text-sm font-black uppercase tracking-widest hover:shadow-lg transition-all active:scale-95"
-              >
-                Close Viewport
-              </button>
-            </div>
           </div>
-        )}
+        </main>
       </div>
+
+      {/* ── Interface Detail Modal ── */}
+      {selectedInterface && (
+        <div className="fixed inset-0 bg-slate-900/40 dark:bg-dark-900/90 backdrop-blur-md flex items-center justify-center p-6 z-50 animate-in fade-in">
+          <div className="glass-modal max-w-2xl w-full p-10 relative overflow-hidden animate-in zoom-in-95 duration-300">
+            <div className="absolute -right-10 -top-10 bg-primary/10 w-40 h-40 rounded-full blur-3xl" />
+            <div className="flex justify-between items-start mb-10">
+              <div className="flex items-center gap-5">
+                <div className="bg-primary/20 p-4 rounded-2xl"><Network className="w-8 h-8 text-primary shadow-glow" /></div>
+                <div>
+                  <h2 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tight">{selectedInterface.name}</h2>
+                  <p className="text-slate-500 font-bold uppercase tracking-widest text-[10px] md:text-xs mt-1">{selectedInterface.type} Physical Interface</p>
+                </div>
+              </div>
+              <button onClick={() => setSelectedInterface(null)} className="p-2 hover:bg-slate-200 dark:hover:bg-white/5 rounded-xl transition-colors text-slate-500 hover:text-slate-900 dark:hover:text-white"><XCircle className="w-6 h-6" /></button>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+              <div className="space-y-4">
+                <DetailRow label="IP Address" value={Array.isArray(selectedInterface.address) ? selectedInterface.address[0] : (selectedInterface.address || 'N/A')} mono />
+                <DetailRow label="Hardware ID" value={selectedInterface['hw-id'] || '—'} mono />
+                <DetailRow label="MTU" value={selectedInterface.mtu || '1500'} />
+                <DetailRow label="State" value={selectedInterface.state || selectedInterface['oper-state']} highlight />
+              </div>
+              <div className="space-y-4">
+                <div className="bg-slate-100 dark:bg-white/5 p-4 rounded-2xl border border-slate-200 dark:border-white/5">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-black text-slate-500 uppercase">Packet Analysis</span>
+                    <Layers className="w-3.5 h-3.5 text-primary" />
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500 dark:text-slate-400 font-medium">RX Packets</span>
+                      <span className="text-info font-black"><AnimatedNumber value={getIfaceRxPackets(selectedInterface)} /></span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500 dark:text-slate-400 font-medium">TX Packets</span>
+                      <span className="text-primary font-black"><AnimatedNumber value={getIfaceTxPackets(selectedInterface)} /></span>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-info/10 p-4 rounded-2xl border border-info/20 text-center">
+                    <div className="text-xs font-black text-slate-900 dark:text-white">{formatBytes(getIfaceRx(selectedInterface))}</div>
+                    <div className="text-[8px] font-bold text-slate-500 uppercase mt-1">Total Ingress</div>
+                  </div>
+                  <div className="bg-primary/10 p-4 rounded-2xl border border-primary/20 text-center">
+                    <div className="text-xs font-black text-slate-900 dark:text-white">{formatBytes(getIfaceTx(selectedInterface))}</div>
+                    <div className="text-[8px] font-bold text-slate-500 uppercase mt-1">Total Egress</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <button onClick={() => setSelectedInterface(null)} className="w-full btn-primary py-4 text-sm font-black uppercase tracking-widest hover:shadow-lg transition-all active:scale-95">Close Viewport</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
-function TabButton({ active, onClick, icon, label }: any) {
+function SidebarCategory({ label }: { label: string }) {
+  return (
+    <h4 className="px-4 text-[10px] font-black text-slate-400 dark:text-slate-600 uppercase tracking-[0.2em] mb-2">{label}</h4>
+  );
+}
+
+function SidebarItem({ active, onClick, icon, label }: any) {
   return (
     <button 
       onClick={onClick}
-      className={`tab-btn ${active ? 'tab-btn-active' : 'tab-btn-inactive'}`}
+      className={`w-full flex items-center gap-3 px-4 py-2.5 rounded-xl text-sm font-bold transition-all duration-200 group ${
+        active 
+          ? 'bg-primary/10 text-primary border border-primary/20 shadow-sm' 
+          : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-white/5 hover:text-slate-900 dark:hover:text-slate-200'
+      }`}
     >
-      {icon}
-      <span className="hidden sm:inline">{label}</span>
+      <div className={`${active ? 'text-primary' : 'text-slate-400 dark:text-slate-600 group-hover:text-primary'} transition-colors`}>{icon}</div>
+      <span>{label}</span>
+      {active && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-primary shadow-glow" />}
     </button>
+  );
+}
+
+function SidebarSummaryCard({ label, value, subValue, icon, color }: any) {
+  return (
+    <div className="glass-card p-6 relative overflow-hidden group hover:-translate-y-1 transition-transform duration-300">
+      <div className="flex justify-between items-start">
+        <div className="space-y-1">
+          <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">{label}</p>
+          <h4 className="text-2xl md:text-3xl font-black text-slate-900 dark:text-white tracking-tighter transition-colors">{value}</h4>
+          <p className="text-[10px] font-bold text-slate-400">{subValue}</p>
+        </div>
+        <div className={`p-3 rounded-2xl transition-transform group-hover:scale-110 text-warning bg-warning/20`}>
+          {icon}
+        </div>
+      </div>
+    </div>
   );
 }
 
 function SummaryCard({ label, value, subValue, icon, progress, color }: any) {
   const colors: any = {
-    primary: 'text-primary bg-primary/20 ring-primary/30',
-    success: 'text-success bg-success/20 ring-success/30',
-    info: 'text-info bg-info/20 ring-info/30',
-    warning: 'text-warning bg-warning/20 ring-warning/30',
+    primary: 'text-primary bg-primary/20',
+    success: 'text-success bg-success/20',
+    info: 'text-info bg-info/20',
+    warning: 'text-warning bg-warning/20',
   };
 
   return (
@@ -760,15 +771,6 @@ function ProtocolRow({ label, active, detail }: any) {
         <span className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-primary transition-colors">{label}</span>
       </div>
       <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">{detail}</span>
-    </div>
-  );
-}
-
-function ResourceRow({ label, value, mono, highlight }: any) {
-  return (
-    <div className="flex justify-between items-baseline gap-4 hover:bg-slate-50 dark:hover:bg-white/5 p-1 -mx-1 rounded transition-colors">
-      <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">{label}</span>
-      <span className={`text-xs font-bold ${highlight ? 'text-primary' : 'text-slate-700 dark:text-slate-300'} ${mono ? 'font-mono' : ''}`}>{value}</span>
     </div>
   );
 }
