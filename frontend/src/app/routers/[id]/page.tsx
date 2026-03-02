@@ -10,7 +10,8 @@ import {
   CheckCircle2, XCircle, Route, Wifi, TerminalSquare, RefreshCw, ChevronLeft,
   Database, Zap, Clock, Maximize2, Layers, Monitor, HardDriveDownload, HardDriveUpload,
   List, Terminal, Search, ChevronDown, ChevronUp, Download, Settings2, Check,
-  LayoutDashboard, FileText, ActivitySquare, Shield, Menu, X as CloseIcon
+  LayoutDashboard, FileText, ActivitySquare, Shield, Menu, X as CloseIcon,
+  Play
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { DashboardSkeleton } from '@/components/Skeleton';
@@ -96,6 +97,11 @@ export default function RouterDashboard() {
   const [loadingTab, setLoadingTab] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
+  // Ping Tool State
+  const [pingTarget, setPingTarget] = useState('');
+  const [pingOutput, setPingOutput] = useState('');
+  const [pingLoading, setPingLoading] = useState(false);
+
   // Customization State
   const [showSettings, setShowSettings] = useState(false);
   const [widgets, setWidgets] = useState({
@@ -176,6 +182,21 @@ export default function RouterDashboard() {
   useEffect(() => {
     fetchTabData();
   }, [activeTab]);
+
+  const handlePing = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!pingTarget) return;
+    setPingLoading(true);
+    setPingOutput('Pinging target from router...');
+    try {
+      const res = await api.post(`/routers/${id}/ping`, { host: pingTarget });
+      setPingOutput(res.data.output);
+    } catch (err: any) {
+      setPingOutput(err.response?.data?.detail || 'Ping failed.');
+    } finally {
+      setPingLoading(false);
+    }
+  };
 
   const configStatus = useMemo(() => {
     if (!routerConfig) return null;
@@ -333,21 +354,21 @@ export default function RouterDashboard() {
                 </div>
               </div>
 
-              {/* Category: Security */}
+              {/* Category: Diagnostics */}
               <div>
-                <SidebarCategory label="Security" />
+                <SidebarCategory label="Diagnostics" />
                 <div className="mt-2 space-y-1">
                   <SidebarItem 
-                    active={false} 
-                    onClick={() => {}} 
-                    icon={<Shield className="w-4 h-4" />} 
-                    label="Firewall Rules" 
+                    active={activeTab === 'ping'} 
+                    onClick={() => setActiveTab('ping')} 
+                    icon={<Wifi className="w-4 h-4" />} 
+                    label="Ping Tool" 
                   />
                   <SidebarItem 
                     active={false} 
                     onClick={() => {}} 
-                    icon={<Lock className="w-4 h-4" />} 
-                    label="VPN Tunnels" 
+                    icon={<Terminal className="w-4 h-4" />} 
+                    label="Traceroute" 
                   />
                 </div>
               </div>
@@ -597,6 +618,33 @@ export default function RouterDashboard() {
                         {conntrack || 'No connection statistics available.'}
                       </pre>
                     )}
+                    {activeTab === 'ping' && (
+                      <div className="space-y-6">
+                        <form onSubmit={handlePing} className="flex flex-col sm:flex-row gap-4">
+                          <div className="flex-1 relative">
+                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                            <input 
+                              required
+                              className="w-full bg-slate-100 dark:bg-dark-900/50 border border-slate-200 dark:border-white/5 rounded-xl py-3 pl-12 pr-4 outline-none focus:ring-2 focus:ring-primary transition-all text-sm"
+                              placeholder="Target IP or Hostname (e.g. 8.8.8.8)"
+                              value={pingTarget}
+                              onChange={(e) => setPingTarget(e.target.value)}
+                            />
+                          </div>
+                          <button 
+                            type="submit" 
+                            disabled={pingLoading}
+                            className="btn-primary px-8 flex items-center justify-center gap-2"
+                          >
+                            {pingLoading ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Play className="w-4 h-4" />}
+                            Execute Ping
+                          </button>
+                        </form>
+                        <div className="bg-slate-100 dark:bg-dark-900/50 p-6 rounded-2xl border border-slate-200 dark:border-white/5 font-mono text-xs text-slate-700 dark:text-slate-300 min-h-[200px] whitespace-pre-wrap shadow-inner">
+                          {pingOutput || 'Enter a target and click "Execute Ping" to start connectivity test from the router.'}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
               </DashboardCard>
@@ -771,6 +819,15 @@ function ProtocolRow({ label, active, detail }: any) {
         <span className="text-xs font-bold text-slate-700 dark:text-slate-200 group-hover:text-primary transition-colors">{label}</span>
       </div>
       <span className="text-[10px] font-black text-slate-500 uppercase tracking-tighter">{detail}</span>
+    </div>
+  );
+}
+
+function ResourceRow({ label, value, mono, highlight }: any) {
+  return (
+    <div className="flex justify-between items-baseline gap-4 hover:bg-slate-50 dark:hover:bg-white/5 p-1 -mx-1 rounded transition-colors">
+      <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">{label}</span>
+      <span className={`text-xs font-bold ${highlight ? 'text-primary' : 'text-slate-700 dark:text-slate-300'} ${mono ? 'font-mono' : ''}`}>{value}</span>
     </div>
   );
 }

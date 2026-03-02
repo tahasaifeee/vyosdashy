@@ -195,6 +195,10 @@ class VyOSClient:
         """Fetch active system connections via plain text."""
         return await self.show_text(["conntrack", "statistics"])
 
+    async def ping(self, host: str, count: int = 4) -> str:
+        """Run ping command from the router to a target host."""
+        return await self.show_text(["ping", host, "count", str(count)])
+
     # ── Config modification (/configure endpoint) ──────────────────────────────
 
     async def set_config(self, path: List[str]) -> Dict[str, Any]:

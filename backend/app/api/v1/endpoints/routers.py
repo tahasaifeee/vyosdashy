@@ -214,7 +214,29 @@ async def get_router_connections(
     stats = await client.get_active_connections()
     return {"stats": stats}
 
+@router.post("/{id}/ping")
+async def ping_from_router(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    id: int,
+    host: str = Body(..., embed=True),
+    count: int = Body(4, embed=True),
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Run ping command from the router to a target host.
+    """
+    result = await db.execute(select(Router).where(Router.id == id))
+    router_obj = result.scalars().first()
+    if not router_obj:
+        raise HTTPException(status_code=404, detail="Router not found")
+
+    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
+    output = await client.ping(host, count)
+    return {"output": output}
+
 @router.delete("/{id}", response_model=RouterSchema)
+
 async def delete_router(
     *,
     db: AsyncSession = Depends(deps.get_db),

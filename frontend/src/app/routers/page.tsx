@@ -63,8 +63,13 @@ export default function RoutersPage() {
 
   const testConnection = async (id: number) => {
     try {
-      await api.post(`/routers/${id}/test-connection`);
+      const response = await api.post(`/routers/${id}/test-connection`);
       fetchRouters();
+      if (response.data.is_online) {
+        alert(`Router "${response.data.name}" is ONLINE.`);
+      } else {
+        alert(`Router "${response.data.name}" is OFFLINE.\nError: ${response.data.error || 'Unknown'}`);
+      }
     } catch (err) {
       alert('Failed to trigger connection test.');
     }
