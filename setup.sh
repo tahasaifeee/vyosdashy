@@ -96,15 +96,28 @@ echo ".env files have been created successfully."
 echo "----------------------------------------"
 
 # Ask to run docker-compose
-read -p "Do you want to start the application with docker-compose? (y/N): " run_docker
+read -p "Do you want to start the application with docker? (y/N): " run_docker
 if [[ "$run_docker" =~ ^[Yy]$ ]]; then
-    echo "Starting Docker containers..."
-    docker-compose up -d --build
+    echo "Checking for Docker Compose..."
+    
+    # Check for 'docker compose' (V2) or 'docker-compose' (V1)
+    if docker compose version >/dev/null 2>&1; then
+        DOCKER_COMPOSE_CMD="docker compose"
+    elif docker-compose version >/dev/null 2>&1; then
+        DOCKER_COMPOSE_CMD="docker-compose"
+    else
+        echo "Error: Neither 'docker compose' nor 'docker-compose' was found."
+        echo "Please install Docker Compose and then run: docker compose up -d"
+        exit 1
+    fi
+
+    echo "Starting Docker containers using '$DOCKER_COMPOSE_CMD'..."
+    $DOCKER_COMPOSE_CMD up -d --build
     echo ""
     echo "Application started!"
     echo "Frontend: http://localhost:3000"
     echo "Backend API: http://localhost:8000"
     echo "API Documentation: http://localhost:8000/docs"
 else
-    echo "Setup complete. You can start the application later with 'docker-compose up -d'."
+    echo "Setup complete. You can start the application later with 'docker compose up -d'."
 fi
