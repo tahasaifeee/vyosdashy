@@ -8,6 +8,7 @@ from app.models.metrics import RouterMetrics
 from app.services.vyos import VyOSClient
 from app.core.database import AsyncSessionLocal
 
+
 class MetricsService:
     @staticmethod
     async def collect_metrics_by_id(router_id: int):
@@ -25,47 +26,50 @@ class MetricsService:
 
             if is_online:
                 try:
-                    interfaces_res, bgp_res, resources_res = await asyncio.gather(
-                        client.get_interface_stats(),
-                        client.get_bgp_summary(),
-                        client.get_resource_usage(),
+                    # Run all fetches concurrently
+                    iface_config_res, bgp_config_res, counters, sys_info = await asyncio.gather(
+                        client.get_interface_config(),    # REST /retrieve showConfig
+                        client.get_bgp_config(),          # REST /retrieve showConfig
+                        client.get_interface_counters(),  # GraphQL (None if unavailable)
+                        client.get_system_info(),         # GraphQL (None if unavailable)
                     )
 
-                    iface_data = interfaces_res.get("data")
-                    bgp_data = bgp_res.get("data") if bgp_res.get("success") else None
-                    resources_data = resources_res.get("data")
+                    iface_data = iface_config_res.get("data") if iface_config_res.get("success") else None
+                    bgp_data = bgp_config_res.get("data") if bgp_config_res.get("success") else None
 
-                    # Log every poll so `docker logs` shows exactly what VyOS returns
-                    print(f"[{router.name}] ifaces={interfaces_res.get('success')} "
-                          f"type={type(iface_data).__name__} | "
-                          f"bgp={bgp_res.get('success')} | "
-                          f"resources={resources_res.get('success')} "
-                          f"type={type(resources_data).__name__}")
-                    if not interfaces_res.get("success"):
-                        print(f"[{router.name}] ifaces error: {interfaces_res.get('error')}")
-                    if resources_data:
-                        print(f"[{router.name}] resources sample: {str(resources_data)[:200]}")
+                    # Merge GraphQL interface counters into the config data
+                    # Counters is a list: [{"ifname": "eth0", "rx_bytes": N, "tx_bytes": N, ...}]
+                    if isinstance(counters, list) and isinstance(iface_data, dict):
+                        for counter in counters:
+                            ifname = counter.get("ifname", "")
+                            # Find this interface in the config tree and attach counters
+                            for iface_type, ifaces in iface_data.items():
+                                if isinstance(ifaces, dict) and ifname in ifaces:
+                                    ifaces[ifname]["rx-bytes"] = counter.get("rx_bytes", 0)
+                                    ifaces[ifname]["tx-bytes"] = counter.get("tx_bytes", 0)
+                                    ifaces[ifname]["rx-packets"] = counter.get("rx_packets", 0)
+                                    ifaces[ifname]["tx-packets"] = counter.get("tx_packets", 0)
 
-                    # Parse CPU/memory if resources returned a structured dict
+                    # Parse CPU/memory from GraphQL system info
                     cpu_usage = 0.0
                     memory_usage = 0.0
-                    if isinstance(resources_data, dict):
-                        # VyOS may return: {"cpu-load": {"1min": 0.45}, "memory": {"used": ..., "total": ...}}
-                        cpu_load = resources_data.get("cpu-load") or resources_data.get("cpu_load", {})
-                        if isinstance(cpu_load, dict):
-                            cpu_usage = float(cpu_load.get("1min") or cpu_load.get("one-min", 0.0))
-                        mem = resources_data.get("memory", {})
-                        if isinstance(mem, dict):
-                            used = mem.get("used", "")
-                            total = mem.get("total", "")
-                            # Values may be strings like "2.3 GB" or raw integers
-                            try:
-                                u = float(str(used).split()[0])
-                                t = float(str(total).split()[0])
-                                if t > 0:
-                                    memory_usage = round(u / t * 100, 1)
-                            except (ValueError, IndexError):
-                                pass
+                    if isinstance(sys_info, dict):
+                        cpu_load = sys_info.get("cpu_load_average") or {}
+                        cpu_usage = float(cpu_load.get("one_minute", 0.0))
+
+                        mem = sys_info.get("memory") or {}
+                        total = mem.get("total", 0)
+                        used = mem.get("used", 0)
+                        if total and total > 0:
+                            memory_usage = round(used / total * 100, 1)
+
+                    # Log what we got on every poll
+                    print(
+                        f"[{router.name}] iface_config={iface_config_res.get('success')} "
+                        f"bgp={bgp_config_res.get('success')} "
+                        f"counters={'ok' if counters else 'n/a (no GraphQL)'} "
+                        f"sysinfo={'ok' if sys_info else 'n/a (no GraphQL)'}"
+                    )
 
                     metrics = RouterMetrics(
                         router_id=router.id,
@@ -75,9 +79,10 @@ class MetricsService:
                         memory_usage=memory_usage,
                     )
                     db.add(metrics)
+
                 except Exception as e:
                     import traceback
-                    print(f"Error fetching metrics for {router.name}: {e}")
+                    print(f"Error collecting metrics for {router.name}: {e}")
                     traceback.print_exc()
 
             db.add(router)
@@ -89,12 +94,10 @@ class MetricsService:
             result = await db.execute(select(Router.id).where(Router.is_enabled == True))
             router_ids = result.scalars().all()
 
-        # Each collect_metrics_by_id opens its own session — safe to gather in parallel
         tasks = [MetricsService.collect_metrics_by_id(rid) for rid in router_ids]
         await asyncio.gather(*tasks)
 
 
-# Background runner function
 async def run_metrics_collector():
     while True:
         try:
@@ -103,6 +106,4 @@ async def run_metrics_collector():
             print("Metrics collection completed.")
         except Exception as e:
             print(f"Metrics collection failed: {e}")
-
-        # Poll every 30 seconds
         await asyncio.sleep(30)

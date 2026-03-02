@@ -60,19 +60,25 @@ function sumIfaceBytes(interfaces: any): { rx: number; tx: number } {
 
 function extractBgpNeighbors(raw: any): Record<string, any> | null {
   if (!raw || typeof raw !== 'object') return null;
-  // VyManager format
+
+  // VyOS showConfig format: { "system-as": "65000", "neighbor": { "1.1.1.1": { "remote-as": "65001" } } }
+  if (raw.neighbor && typeof raw.neighbor === 'object') return raw.neighbor;
+
+  // Older/alternate: { "neighbors": { ... } }
+  if (raw.neighbors && typeof raw.neighbors === 'object') return raw.neighbors;
+
+  // VyManager GraphQL format: { protocols: { bgp: { 4: { neighbor: {...} } } } }
   if (raw.protocols?.bgp) {
     const bgp = raw.protocols.bgp;
-    // bgp may have AFI keys like "4" or "6"
     for (const afi of Object.values(bgp) as any[]) {
-      if (afi?.neighbor) return afi.neighbor;
+      if ((afi as any)?.neighbor) return (afi as any).neighbor;
     }
   }
-  // { neighbors: { ... } }
-  if (raw.neighbors && typeof raw.neighbors === 'object') return raw.neighbors;
-  // Check if the object itself looks like a neighbor map (keys are IPs)
+
+  // Flat: the object itself is a neighbor map (keys look like IP addresses)
   const keys = Object.keys(raw);
   if (keys.length > 0 && (keys[0].includes('.') || keys[0].includes(':'))) return raw;
+
   return null;
 }
 
@@ -184,12 +190,17 @@ export default function RouterDashboard() {
         <div key={peer} className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700">
           <div className="flex justify-between items-center mb-1">
             <span className="font-medium text-sm">{peer}</span>
-            <span className={`text-[10px] uppercase font-bold ${
-              state === 'Established' ? 'text-emerald-600' : 'text-amber-600'
-            }`}>{state || 'Unknown'}</span>
+            {state ? (
+              <span className={`text-[10px] uppercase font-bold ${
+                state === 'Established' ? 'text-emerald-600' : 'text-amber-600'
+              }`}>{state}</span>
+            ) : (
+              <span className="text-[10px] uppercase font-bold text-gray-400">Configured</span>
+            )}
           </div>
           <div className="text-xs text-gray-500">
-            {remoteAs ? `AS ${remoteAs} • ` : ''}Up for {uptime}
+            {remoteAs ? `Peer AS ${remoteAs}` : 'Remote AS unknown'}
+            {uptime && uptime !== 'N/A' ? ` • Up ${uptime}` : ''}
           </div>
         </div>
       );
