@@ -71,6 +71,17 @@ export default function RoutersPage() {
     }
   };
 
+  const handleDeleteRouter = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this router?')) return;
+    try {
+      await api.delete(`/routers/${id}`);
+      fetchRouters();
+    } catch (err) {
+      console.error('Failed to delete router', err);
+      alert('Failed to delete router.');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
       <div className="max-w-6xl mx-auto">
@@ -104,11 +115,20 @@ export default function RoutersPage() {
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{r.name}</h3>
                     <p className="text-sm text-gray-500">{r.hostname}</p>
                   </div>
-                  <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-                    r.status === 'online' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                  }`}>
-                    {r.status === 'online' ? <Signal className="w-3 h-3" /> : <SignalLow className="w-3 h-3" />}
-                    {r.status.toUpperCase()}
+                  <div className="flex items-center gap-2">
+                    <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
+                      r.status === 'online' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                    }`}>
+                      {r.status === 'online' ? <Signal className="w-3 h-3" /> : <SignalLow className="w-3 h-3" />}
+                      {r.status.toUpperCase()}
+                    </div>
+                    <button 
+                      onClick={() => handleDeleteRouter(r.id)}
+                      className="p-1 text-gray-400 hover:text-red-500 transition"
+                      title="Delete Router"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
                 <div className="space-y-2 mb-6">
