@@ -172,20 +172,34 @@ update_app() {
         return
     fi
 
-    # Migration: if backend/.env is still tracked by git, preserve local settings
-    # and remove it from the index so git pull can proceed cleanly.
+    # Always preserve backend/.env — it holds real DB credentials and the secret key
+    [ -f "backend/.env" ] && cp backend/.env /tmp/vyos_backend_env_backup
+
+    # Migration: if backend/.env is still tracked by git, remove it from the index
+    # so the incoming commit that untracks it can proceed without conflict.
     if git ls-files --error-unmatch backend/.env >/dev/null 2>&1; then
-        echo "Note: Migrating backend/.env to untracked (preserving your settings)..."
-        cp backend/.env /tmp/vyos_backend_env_backup
-        git checkout -- backend/.env   # reset to committed version (clears local changes)
-        git rm --cached backend/.env   # remove from index
-        echo "backend/.env" >> .gitignore
+        echo "Note: Removing backend/.env from git tracking (settings preserved)..."
+        git checkout -- backend/.env
+        git rm --cached backend/.env
     fi
 
     echo "Pulling latest changes from repository..."
-    git pull
+    # Fetch first so we can inspect what the incoming commits touch before merging.
+    git fetch origin
 
-    # Restore backend/.env after pull (pull may have deleted it when untracking it)
+    # Remove any untracked local files that the incoming commits would create/overwrite.
+    # These are repo-managed files (e.g. .gitignore, CLAUDE.md) — safe to replace with
+    # the repo version. backend/.env is handled separately via the backup above.
+    git diff --name-only HEAD FETCH_HEAD 2>/dev/null | while IFS= read -r f; do
+        if [ -f "$f" ] && ! git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
+            echo "  Clearing untracked file for update: $f"
+            rm -f "$f"
+        fi
+    done
+
+    git merge FETCH_HEAD
+
+    # Restore actual backend configuration after merge
     if [ -f /tmp/vyos_backend_env_backup ]; then
         cp /tmp/vyos_backend_env_backup backend/.env
         rm -f /tmp/vyos_backend_env_backup
