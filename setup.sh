@@ -8,6 +8,29 @@ echo "----------------------------------------"
 echo "   VyOS UI Manager - Setup Script"
 echo "----------------------------------------"
 
+# Function to install a package if it's missing
+install_if_missing() {
+    local pkg=$1
+    if ! command -v "$pkg" >/dev/null 2>&1; then
+        echo "Installing missing dependency: $pkg..."
+        if command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y "$pkg" >/dev/null
+        elif command -v yum >/dev/null 2>&1; then
+            sudo yum install -y "$pkg" >/dev/null
+        else
+            echo "Error: Package manager not found. Please install '$pkg' manually."
+            exit 1
+        fi
+    fi
+}
+
+# Ensure basic dependencies are present
+install_if_missing curl
+install_if_missing git
+install_if_missing python3
+install_if_missing sudo
+
 # Check if we are inside a git repo or if we need to clone
 if [ ! -d ".git" ]; then
     if [ -d "vyosdashy" ]; then
@@ -109,17 +132,49 @@ echo "----------------------------------------"
 # Ask to run docker-compose
 read -p "Do you want to start the application with docker? (y/N): " run_docker
 if [[ "$run_docker" =~ ^[Yy]$ ]]; then
+    echo "Checking for Docker..."
+    if ! command -v docker >/dev/null 2>&1; then
+        echo "Docker is not installed."
+        read -p "Would you like to install Docker now? (y/N): " install_docker
+        if [[ "$install_docker" =~ ^[Yy]$ ]]; then
+            echo "Installing Docker..."
+            curl -fsSL https://get.docker.com | sh
+            # Start and enable docker if on systemd
+            if command -v systemctl >/dev/null 2>&1; then
+                sudo systemctl start docker
+                sudo systemctl enable docker
+            fi
+        else
+            echo "Please install Docker and then run the script again."
+            exit 1
+        fi
+    fi
+
     echo "Checking for Docker Compose..."
-    
-    # Check for 'docker compose' (V2) or 'docker-compose' (V1)
     if docker compose version >/dev/null 2>&1; then
         DOCKER_COMPOSE_CMD="docker compose"
     elif docker-compose version >/dev/null 2>&1; then
         DOCKER_COMPOSE_CMD="docker-compose"
     else
-        echo "Error: Neither 'docker compose' nor 'docker-compose' was found."
-        echo "Please install Docker Compose and then run: docker compose up -d"
-        exit 1
+        echo "Docker Compose is not found."
+        read -p "Would you like to install Docker Compose plugin? (y/N): " install_compose
+        if [[ "$install_compose" =~ ^[Yy]$ ]]; then
+            # Assuming Debian/Ubuntu based on common server environments, 
+            # or try to use the generic method if apt is missing
+            if command -v apt-get >/dev/null 2>&1; then
+                sudo apt-get update
+                sudo apt-get install -y docker-compose-plugin
+                DOCKER_COMPOSE_CMD="docker compose"
+            else
+                # Fallback to manual download if not on apt
+                sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+                sudo chmod +x /usr/local/bin/docker-compose
+                DOCKER_COMPOSE_CMD="docker-compose"
+            fi
+        else
+            echo "Please install Docker Compose and then run: docker compose up -d"
+            exit 1
+        fi
     fi
 
     echo "Starting Docker containers using '$DOCKER_COMPOSE_CMD'..."
