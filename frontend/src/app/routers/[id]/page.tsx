@@ -413,7 +413,7 @@ export default function RouterDashboard() {
                 </div>
                 <div className="flex flex-col">
                   <span className="text-[10px] font-bold text-slate-500">OS Version</span>
-                  <span className="text-xs font-black text-primary truncate">{vyosInfo?.version || 'N/A'}</span>
+                  <span className="text-xs font-black text-primary truncate">{routerInfo?.version || vyosInfo?.version || 'N/A'}</span>
                 </div>
               </div>
             </div>

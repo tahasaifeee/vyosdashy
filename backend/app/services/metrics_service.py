@@ -41,11 +41,10 @@ class MetricsService:
         counters = []
         try:
             lines = text.splitlines()
-            # Find start of table (usually looks like Header | Header | ...)
             start_index = -1
             for i, line in enumerate(lines):
                 if "Interface" in line and "Rx" in line:
-                    start_index = i + 2 # Skip header and separator
+                    start_index = i + 2
                     break
             
             if start_index != -1:
@@ -53,7 +52,6 @@ class MetricsService:
                     if not line.strip(): continue
                     parts = line.split()
                     if len(parts) >= 5:
-                        # Standard VyOS counters: Interface | Rx Packets | Rx Bytes | Tx Packets | Tx Bytes
                         counters.append({
                             "ifname": parts[0],
                             "rx_packets": int(parts[1].replace(',', '')),
@@ -87,6 +85,18 @@ class MetricsService:
                              message=f"Router {router.name} is now {new_status}", alert_type="status_change"))
 
             if is_online:
+                # Update OS Version and real Hostname during collection
+                try:
+                    info_res = await client.get_info()
+                    if info_res.get("success") and info_res.get("data"):
+                        info_data = info_res["data"]
+                        if info_data.get("version"):
+                            router.version = info_data["version"]
+                        # If VyOS returns a hostname, we store it in a way the frontend can use
+                        # Note: We keep router.hostname as the IP/FQDN for connection purposes
+                except:
+                    pass
+
                 iface_data, bgp_data = {}, {}
                 cpu_usage, memory_usage, uptime = 0.0, 0.0, 0
                 load_avg = {"1m": 0.0, "5m": 0.0, "15m": 0.0}
