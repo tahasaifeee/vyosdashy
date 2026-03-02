@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional, Union
 
-from pydantic import AnyHttpUrl, PostgresDsn, validator
+from pydantic import PostgresDsn, validator
 from pydantic_settings import BaseSettings
 
 
@@ -9,12 +9,12 @@ class Settings(BaseSettings):
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str  # Required — generate with: python -c "import secrets; print(secrets.token_hex(32))"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60  # 1 hour
-    BACKEND_CORS_ORIGINS: Union[List[AnyHttpUrl], str] = []
+    BACKEND_CORS_ORIGINS: Union[List[str], str] = []
 
     @validator("BACKEND_CORS_ORIGINS", pre=True)
-    def assemble_cors_origins(cls, v: Union[str, List[str]]) -> Union[List[str], str]:
+    def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
         if isinstance(v, str) and not v.startswith("["):
-            return [i.strip() for i in v.split(",")]
+            return [i.strip() for i in v.split(",") if i.strip()]
         elif isinstance(v, str) and v.startswith("["):
             import json
             return json.loads(v)

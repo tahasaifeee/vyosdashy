@@ -8,21 +8,23 @@ VyOS UI Manager — a web dashboard for managing multiple VyOS router instances 
 
 ## Commands
 
-### Full Stack (Docker)
+### Full Stack (Docker) — preferred for production
 ```bash
-docker-compose up --build      # Build and start all services
-docker-compose up              # Start without rebuild
-docker-compose down            # Stop all services
+docker compose up -d --build --force-recreate   # Build, recreate, and start all services
+docker compose up -d --build --force-recreate --no-deps backend  # Backend only (faster)
+docker compose down                              # Stop all services
+docker compose logs backend --tail=50 -f        # Tail backend logs
 ```
+
+> Always use `--force-recreate` after any `.env` change. `docker compose restart` does NOT reload env vars — it preserves the values baked in at container creation time. Only `up -d` (which recreates the container) picks up fresh env vars.
 
 ### Backend (FastAPI)
 ```bash
 cd backend
-python -m venv venv && source venv/bin/activate   # Create venv (Linux/macOS)
+python -m venv venv && source venv/bin/activate   # Linux/macOS
 # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload  # Dev server at http://localhost:8000
-# API docs: http://localhost:8000/docs
+uvicorn app.main:app --reload  # Dev server — http://localhost:8000/docs
 ```
 
 ### Frontend (Next.js)
@@ -34,65 +36,86 @@ npm run build   # Production build
 npm run lint    # ESLint check
 ```
 
-### Create First User (no sign-up page by design)
+### Create First Admin User
+The registration endpoint requires superuser auth, so use the direct DB script:
 ```bash
-curl -X POST "http://localhost:8000/api/v1/users/" \
-  -H "Content-Type: application/json" \
-  -d '{"email": "admin@example.com", "password": "securepassword", "full_name": "Admin", "role": "admin"}'
+# Via docker exec (use -i not -it for non-interactive contexts)
+docker exec -i <backend-container> python app/create_first_user.py admin@example.com password "Admin User" admin
+
+# Via setup.sh (option 2 → Reconfigure → prompts for admin user)
+./setup.sh
 ```
 
 ## Architecture
 
 ### Backend (`backend/app/`)
-- `main.py` — FastAPI app entry point. Uses a `lifespan` context manager to: create all DB tables via `Base.metadata.create_all` (no Alembic — schema changes require manual handling), then start the background metrics polling loop as an `asyncio.create_task`.
-- `core/config.py` — Pydantic `Settings` loaded from `.env`. Required env vars: `POSTGRES_SERVER`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`. Optional: `DATABASE_URL`, `REDIS_URL`, `SECRET_KEY`.
-- `core/database.py` — Async SQLAlchemy engine + `AsyncSessionLocal` session factory.
-- `core/security.py` — JWT creation/verification and password hashing.
-- `api/v1/endpoints/` — Route handlers: `login.py` (OAuth2 token), `users.py`, `routers.py`, `metrics.py`.
-- `api/deps.py` — FastAPI dependency injectors: `get_db` (async session), `get_current_user` (JWT → User), `get_current_active_superuser`.
-- `services/vyos.py` — `VyOSClient` class. All router API calls go through here. Uses `httpx.AsyncClient` with `verify=False` (self-signed certs). Key methods: `test_connection`, `get_config`, `set_config`, `commit`, `save`, `get_interface_stats`, `get_bgp_summary`.
-- `services/metrics_service.py` — `MetricsService` with `collect_all_metrics()` that polls all enabled routers in parallel. `run_metrics_collector()` loops every 30 seconds and is started in `main.py` lifespan.
+- `main.py` — FastAPI entry point. Lifespan creates all DB tables via `Base.metadata.create_all` (no Alembic), starts the 30s metrics polling loop, and wires CORS from `settings.BACKEND_CORS_ORIGINS` (falls back to `["*"]` if empty).
+- `core/config.py` — Pydantic `Settings`. `SECRET_KEY` has **no default** — app crashes at startup if missing. `BACKEND_CORS_ORIGINS` is `List[str]` (plain strings, not `AnyHttpUrl`) to prevent Pydantic v2 from normalizing URLs and adding trailing slashes that break CORS matching.
+- `core/security.py` — JWT (HS256) creation/verification and bcrypt password hashing. Tokens expire in 60 minutes. Uses `datetime.now(timezone.utc)` (not deprecated `utcnow()`).
+- `api/deps.py` — `get_current_user` decodes JWT, handles `TypeError`/`ValueError` on bad `sub` claim, returns 403 (not 500) on invalid tokens. `get_current_active_superuser` for admin-only endpoints.
+- `api/v1/endpoints/login.py` — OAuth2 token endpoint. User-not-found and wrong-password checks are combined into one branch to prevent user enumeration.
+- `api/v1/endpoints/users.py` — `POST /` requires superuser. `GET /me` is `async def`.
+- `api/v1/endpoints/routers.py` — Router CRUD. On create, triggers immediate metrics collection via FastAPI `BackgroundTasks` (not `asyncio.create_task`).
+- `api/v1/endpoints/metrics.py` — `limit` is capped at 1000 via `Query(ge=1, le=1000)`. Both endpoints validate `router_id` existence (404 if not found).
+- `services/vyos.py` — `VyOSClient`. All calls use `verify=False` (self-signed certs on VyOS). Auth is a `key` form field, not a header. Always call `commit()` + `save()` after writes.
+- `services/metrics_service.py` — `collect_all_metrics()` fetches router IDs then fans out to `collect_metrics_by_id()` in parallel. Each call opens its own `AsyncSessionLocal` session. Runs every 30s via `run_metrics_collector()`.
 
 ### Frontend (`frontend/src/`)
-- `lib/api.ts` — Axios instance that auto-reads `NEXT_PUBLIC_API_URL` env var. Request interceptor automatically injects `Bearer` JWT token from `localStorage`. **All API calls must use this instance**, not raw fetch/axios.
-- `app/` — Next.js 14 App Router pages: `login/`, `page.tsx` (router list dashboard), `routers/[id]/page.tsx` (per-router detail).
-- `services/` — Frontend service layer wrapping `api.ts` calls.
-- `components/` — Reusable React components (Tailwind + Lucide Icons + Recharts).
+- `lib/api.ts` — Axios instance. Reads `NEXT_PUBLIC_API_URL` env var, falls back to `window.location.hostname:8000`. JWT injected from `localStorage` on every request via interceptor. **All API calls must use this instance.**
+- `app/routers/page.tsx` — Router list + Add/Delete modal. Error message on add failure shows `err.response?.data?.detail` (backend error) or fallback text.
+- `app/routers/[id]/page.tsx` — Per-router dashboard. Throughput chart computes **delta between consecutive samples** divided by 30s poll interval (Mbps), not raw cumulative byte counters. Polls every 30s via `setInterval`.
+- `app/login/page.tsx` — Login form, stores JWT in `localStorage` on success.
 
 ### Data Flow
-1. Frontend authenticates → receives JWT → stores in `localStorage`
-2. All subsequent requests include `Authorization: Bearer <token>` via interceptor
-3. Backend validates JWT in `deps.get_current_user` → injects `User` into route handlers
-4. Router CRUD endpoints in `api/v1/endpoints/routers.py` interact with PostgreSQL via async SQLAlchemy
-5. Background task in `metrics_service.py` polls each enabled router every 30s, updating `Router.status` and inserting `RouterMetrics` rows
+1. Frontend authenticates → JWT stored in `localStorage`
+2. All requests include `Authorization: Bearer <token>` via Axios interceptor
+3. Backend validates JWT in `deps.get_current_user` → `User` injected into route handlers
+4. Router CRUD → PostgreSQL via async SQLAlchemy
+5. Background `metrics_service.py` polls every enabled router every 30s → updates `Router.status` + inserts `RouterMetrics` rows
 
 ### VyOS API Pattern
-All VyOS interactions follow the REST API pattern:
-- `POST /retrieve` with `{"op": "showConfig"/"show", "path": [...]}` for reads
-- `POST /configure` with `{"op": "set"/"delete", "path": [...]}` for writes
-- Always follow writes with `POST /commit` then `POST /save`
-- The `VyOSClient._post()` method handles auth via `key` form field (not a header)
+- `POST /retrieve` — `{"op": "showConfig"/"show", "path": [...]}` for reads
+- `POST /configure` — `{"op": "set"/"delete", "path": [...]}` for writes
+- `POST /commit` then `POST /save` — **always required after writes** to persist on router
+- Auth via `key` form field (not a header)
 
 ## Environment Variables
 
-Backend `.env` (at project root):
+Two `.env` files are kept in sync by `setup.sh`:
+- **Root `.env`** — read by Docker Compose `env_file:` to set container environment variables
+- **`backend/.env`** — volume-mounted into the backend container as `/app/.env`, read directly by Pydantic `BaseSettings`
+
+Both must match. `reconfigure` in `setup.sh` writes root `.env` then `cp .env backend/.env`.
+
 ```
-SECRET_KEY=<generated>
+SECRET_KEY=<generate: python3 -c "import secrets; print(secrets.token_hex(32))">
 POSTGRES_SERVER=db
 POSTGRES_USER=postgres
 POSTGRES_PASSWORD=<set>
 POSTGRES_DB=vyos_manager
-DATABASE_URL=postgresql+asyncpg://...
+DATABASE_URL=postgresql+asyncpg://postgres:<password>@db:5432/vyos_manager
 REDIS_URL=redis://redis:6379/0
-NEXT_PUBLIC_API_URL=http://localhost:8000
+BACKEND_CORS_ORIGINS=http://<server-ip>:3000,http://localhost:3000
+NEXT_PUBLIC_API_URL=http://<server-ip>:8000
 ```
 
-Run `./setup.sh` to generate `.env` files interactively.
+`BACKEND_CORS_ORIGINS` must include the **actual server IP** (not just localhost), otherwise all browser API calls are blocked by CORS. `setup.sh` auto-detects the public IP and includes it in the default.
 
 ## Key Conventions
 
-- **Async everywhere**: All DB and I/O operations use `async/await`. Do not introduce synchronous blocking calls in endpoint handlers or services.
-- **No Alembic**: Schema is managed via `create_all` on startup. For schema changes in dev, the easiest path is dropping and recreating tables. Plan for proper migrations before production.
-- **VyOS config changes**: Always call `commit()` + `save()` after any `set_config()` or `delete_config()` call to persist changes on the router.
-- **Router status**: After any connectivity test, update `router.status` (enum: `online`/`offline`/`unknown`) and `router.last_seen` in the DB.
-- **API key security**: Router API keys are stored in plaintext in the DB (`router.api_key`). Encryption is a noted TODO.
+- **Async everywhere**: All DB and I/O in `async/await`. No blocking calls in route handlers or services.
+- **No Alembic**: Schema managed by `create_all` on startup. Drop and recreate tables for schema changes in dev.
+- **VyOS writes**: Always `commit()` + `save()` after `set_config()` / `delete_config()`.
+- **Router status**: After any connectivity test, update `router.status` (`online`/`offline`/`unknown`) and `router.last_seen` with `datetime.now(timezone.utc)`.
+- **API keys**: Stored in plaintext in `routers.api_key` — encryption is a TODO.
+- **User registration**: Gated behind `get_current_active_superuser`. Use `create_first_user.py` script to bootstrap the first admin user.
+- **CORS origins**: Use plain `str` not `AnyHttpUrl` in config. Pydantic v2 normalizes `AnyHttpUrl` by adding trailing slashes, which silently breaks CORS matching in FastAPI's middleware.
+
+## setup.sh Behaviour
+
+The script auto-detects whether an installation exists (`.git` present) and shows:
+- **Option 1 — Update**: `git fetch` + clean untracked conflicts + `git merge` + `docker compose up -d --build --force-recreate`
+- **Option 2 — Reconfigure**: Re-prompts all settings, rewrites `.env` files, `docker compose up -d --build --force-recreate`
+- **Option 3 — Uninstall**: `docker compose down [-v]` + removes directory
+
+The update path handles the one-time migration where `backend/.env` was previously tracked by git: backs it up, removes from index, fetches, clears any other untracked conflicts, merges, then restores `backend/.env`.

@@ -156,7 +156,7 @@ EOF
     if [ -n "$DOCKER_COMPOSE_CMD" ]; then
         prompt_user "Rebuild and restart containers to apply changes? (y/N): " "n" restart
         if [[ "$restart" =~ ^[Yy]$ ]]; then
-            $DOCKER_COMPOSE_CMD up -d --build
+            $DOCKER_COMPOSE_CMD up -d --build --force-recreate
         fi
         create_admin_user
     fi
@@ -208,7 +208,7 @@ update_app() {
 
     if [ -n "$DOCKER_COMPOSE_CMD" ]; then
         echo "Rebuilding and restarting containers..."
-        $DOCKER_COMPOSE_CMD up -d --build
+        $DOCKER_COMPOSE_CMD up -d --build --force-recreate
         create_admin_user
     else
         echo "Update complete. (Docker Compose not found, please restart manually)"
