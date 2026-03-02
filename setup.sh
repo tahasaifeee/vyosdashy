@@ -72,6 +72,23 @@ DOCKER_COMPOSE_CMD=$(detect_docker_compose)
 
 # --- MODULES ---
 
+create_admin_user() {
+    echo ""
+    echo "--- Admin User Setup ---"
+    prompt_user "Create/Update admin user? (y/N): " "n" create_admin
+    if [[ "$create_admin" =~ ^[Yy]$ ]]; then
+        prompt_user "Admin Email [admin@example.com]: " "admin@example.com" ADMIN_EMAIL
+        prompt_user "Admin Password: " "secure_password" ADMIN_PASSWORD
+        prompt_user "Admin Full Name [Admin User]: " "Admin User" ADMIN_NAME
+        
+        echo "Creating admin user in database..."
+        # We need to wait a bit for the DB to be ready if it's a fresh start
+        sleep 5
+        docker exec -it vyosdashy-backend-1 python app/create_first_user.py "$ADMIN_EMAIL" "$ADMIN_PASSWORD" "$ADMIN_NAME" "admin" || \
+        echo "Failed to create user. Make sure containers are running and database is ready."
+    fi
+}
+
 reconfigure() {
     echo ""
     echo "--- Reconfiguration ---"
@@ -118,6 +135,7 @@ EOF
         prompt_user "Restart containers to apply changes? (y/N): " "n" restart
         if [[ "$restart" =~ ^[Yy]$ ]]; then
             $DOCKER_COMPOSE_CMD up -d
+            create_admin_user
         fi
     fi
 }
@@ -131,6 +149,7 @@ update_app() {
     if [ -n "$DOCKER_COMPOSE_CMD" ]; then
         echo "Rebuilding and restarting containers..."
         $DOCKER_COMPOSE_CMD up -d --build
+        create_admin_user
     else
         echo "Update complete. (Docker Compose not found, please restart manually)"
     fi
@@ -157,7 +176,6 @@ uninstall_app() {
 
     echo "Removing installation directory..."
     cd ..
-    # Be careful with rm -rf, ensure we are in the right place
     if [[ "$(basename "$PWD")" != "vyosdashy" ]]; then
         rm -rf vyosdashy
         echo "VyOS UI Manager has been uninstalled."
@@ -171,7 +189,6 @@ install_app() {
     echo ""
     echo "--- Fresh Installation ---"
     
-    # Check if we need to clone
     if [ ! -d ".git" ]; then
         if [ -d "vyosdashy" ]; then
             cd vyosdashy
@@ -186,7 +203,6 @@ install_app() {
 
     prompt_user "Do you want to start the application with docker? (y/N): " "n" run_docker
     if [[ "$run_docker" =~ ^[Yy]$ ]]; then
-        # Install Docker if missing
         if ! command -v docker >/dev/null 2>&1; then
             prompt_user "Docker not found. Install it? (y/N): " "n" inst_docker
             if [[ "$inst_docker" =~ ^[Yy]$ ]]; then
@@ -198,7 +214,6 @@ install_app() {
             fi
         fi
 
-        # Install Docker Compose if missing
         DOCKER_COMPOSE_CMD=$(detect_docker_compose)
         if [ -z "$DOCKER_COMPOSE_CMD" ]; then
             prompt_user "Docker Compose not found. Install it? (y/N): " "n" inst_compose
@@ -216,6 +231,9 @@ install_app() {
 
         if [ -n "$DOCKER_COMPOSE_CMD" ]; then
             $DOCKER_COMPOSE_CMD up -d --build
+            echo "Waiting for database to initialize..."
+            sleep 10
+            create_admin_user
             echo "Application started!"
             echo "Frontend: http://localhost:3000"
             echo "Backend: http://localhost:8000"
@@ -227,21 +245,19 @@ install_app() {
 
 # --- MAIN LOGIC ---
 
-# Check if already installed
 IS_INSTALLED=false
 if [ -d ".git" ] || ([ -d "vyosdashy" ] && [ -d "vyosdashy/.git" ]); then
     IS_INSTALLED=true
 fi
 
 if [ "$IS_INSTALLED" = true ]; then
-    # Move into directory if needed
     if [ ! -d ".git" ] && [ -d "vyosdashy" ]; then
         cd vyosdashy
     fi
 
     echo "Existing installation detected."
     echo "1) Update (Pull latest code and rebuild)"
-    echo "2) Reconfigure (Update .env settings)"
+    echo "2) Reconfigure (Update .env settings and Admin user)"
     echo "3) Uninstall (Stop and remove everything)"
     echo "4) Exit"
     prompt_user "Select an option [1-4]: " "4" choice
