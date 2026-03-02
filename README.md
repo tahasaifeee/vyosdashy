@@ -7,7 +7,7 @@ A modern web dashboard for managing multiple VyOS router instances via their RES
 Run the following command on your server to install and set up everything automatically:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/tahasaifeee/vyosdashy/main/setup.sh | bash
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/tahasaifeee/vyosdashy/main/setup.sh)"
 ```
 
 ## Features

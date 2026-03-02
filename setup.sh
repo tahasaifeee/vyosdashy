@@ -25,6 +25,25 @@ install_if_missing() {
     fi
 }
 
+# Helper for interactive input that works with curl | bash
+prompt_user() {
+    local prompt_text=$1
+    local default_value=$2
+    local result_var=$3
+    local input_val
+
+    printf "%s" "$prompt_text" >&2
+    if read -r input_val < /dev/tty; then
+        if [ -z "$input_val" ]; then
+            eval "$result_var=\"$default_value\""
+        else
+            eval "$result_var=\"$input_val\""
+        fi
+    else
+        eval "$result_var=\"$default_value\""
+    fi
+}
+
 # Ensure basic dependencies are present
 install_if_missing curl
 install_if_missing git
@@ -59,7 +78,7 @@ generate_secret_key() {
 
 # Check if .env already exists
 if [ -f .env ]; then
-    read -p ".env file already exists. Overwrite? (y/N): " overwrite < /dev/tty
+    prompt_user ".env file already exists. Overwrite? (y/N): " "n" overwrite
     if [[ ! "$overwrite" =~ ^[Yy]$ ]]; then
         echo "Setup aborted."
         exit 0
@@ -70,33 +89,17 @@ fi
 echo ""
 echo "Please provide the following information (press Enter for defaults):"
 
-read -p "Project Name [VyOS UI Manager]: " PROJECT_NAME < /dev/tty
-PROJECT_NAME=${PROJECT_NAME:-"VyOS UI Manager"}
+prompt_user "Project Name [VyOS UI Manager]: " "VyOS UI Manager" PROJECT_NAME
+prompt_user "Postgres User [postgres]: " "postgres" POSTGRES_USER
+prompt_user "Postgres Password [secure_password]: " "secure_password" POSTGRES_PASSWORD
+prompt_user "Postgres Database [vyos_manager]: " "vyos_manager" POSTGRES_DB
+prompt_user "Postgres Server [db]: " "db" POSTGRES_SERVER
 
-read -p "Postgres User [postgres]: " POSTGRES_USER < /dev/tty
-POSTGRES_USER=${POSTGRES_USER:-"postgres"}
-
-read -p "Postgres Password [secure_password]: " POSTGRES_PASSWORD < /dev/tty
-POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-"secure_password"}
-
-read -p "Postgres Database [vyos_manager]: " POSTGRES_DB < /dev/tty
-POSTGRES_DB=${POSTGRES_DB:-"vyos_manager"}
-
-read -p "Postgres Server [db]: " POSTGRES_SERVER < /dev/tty
-POSTGRES_SERVER=${POSTGRES_SERVER:-"db"}
-
-SECRET_KEY=$(generate_secret_key)
-read -p "Secret Key (press Enter to use generated): " USER_SECRET_KEY < /dev/tty
-SECRET_KEY=${USER_SECRET_KEY:-$SECRET_KEY}
-
-read -p "Backend CORS Origins [http://localhost:3000,http://localhost:8000]: " BACKEND_CORS_ORIGINS < /dev/tty
-BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS:-'["http://localhost:3000", "http://localhost:8000"]'}
-
-read -p "Next Public API URL [http://localhost:8000]: " NEXT_PUBLIC_API_URL < /dev/tty
-NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-"http://localhost:8000"}
-
-read -p "Redis URL [redis://redis:6379/0]: " REDIS_URL < /dev/tty
-REDIS_URL=${REDIS_URL:-"redis://redis:6379/0"}
+GENERATED_KEY=$(generate_secret_key)
+prompt_user "Secret Key (press Enter to use generated): " "$GENERATED_KEY" SECRET_KEY
+prompt_user "Backend CORS Origins [http://localhost:3000,http://localhost:8000]: " '["http://localhost:3000", "http://localhost:8000"]' BACKEND_CORS_ORIGINS
+prompt_user "Next Public API URL [http://localhost:8000]: " "http://localhost:8000" NEXT_PUBLIC_API_URL
+prompt_user "Redis URL [redis://redis:6379/0]: " "redis://redis:6379/0" REDIS_URL
 
 # Construct DATABASE_URL
 DATABASE_URL="postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_SERVER}:5432/${POSTGRES_DB}"
@@ -130,12 +133,12 @@ echo ".env files have been created successfully."
 echo "----------------------------------------"
 
 # Ask to run docker-compose
-read -p "Do you want to start the application with docker? (y/N): " run_docker < /dev/tty
+prompt_user "Do you want to start the application with docker? (y/N): " "n" run_docker
 if [[ "$run_docker" =~ ^[Yy]$ ]]; then
     echo "Checking for Docker..."
     if ! command -v docker >/dev/null 2>&1; then
         echo "Docker is not installed."
-        read -p "Would you like to install Docker now? (y/N): " install_docker < /dev/tty
+        prompt_user "Would you like to install Docker now? (y/N): " "n" install_docker
         if [[ "$install_docker" =~ ^[Yy]$ ]]; then
             echo "Installing Docker..."
             curl -fsSL https://get.docker.com | sh
@@ -157,10 +160,9 @@ if [[ "$run_docker" =~ ^[Yy]$ ]]; then
         DOCKER_COMPOSE_CMD="docker-compose"
     else
         echo "Docker Compose is not found."
-        read -p "Would you like to install Docker Compose plugin? (y/N): " install_compose < /dev/tty
+        prompt_user "Would you like to install Docker Compose plugin? (y/N): " "n" install_compose
         if [[ "$install_compose" =~ ^[Yy]$ ]]; then
-            # Assuming Debian/Ubuntu based on common server environments, 
-            # or try to use the generic method if apt is missing
+            # Assuming Debian/Ubuntu based on common server environments
             if command -v apt-get >/dev/null 2>&1; then
                 sudo apt-get update
                 sudo apt-get install -y docker-compose-plugin
