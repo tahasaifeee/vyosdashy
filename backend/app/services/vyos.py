@@ -158,6 +158,43 @@ class VyOSClient:
             return None
         return result.get("data", {}).get("ShowSystemInformation", {}).get("result")
 
+    # ── Advanced Insights (Phase 3) ──────────────────────────────────────────
+
+    async def get_routing_table(self) -> Optional[List[Dict[str, Any]]]:
+        """Fetch IPv4 routing table via GraphQL (VyOS 1.4+)."""
+        result = await self._graphql("""
+        {
+          ShowIpRoute {
+            result {
+              protocol
+              prefix
+              next_hop {
+                interface
+                next_hop
+              }
+              selected
+            }
+          }
+        }
+        """)
+        if "errors" in result:
+            return None
+        return result.get("data", {}).get("ShowIpRoute", {}).get("result")
+
+    async def get_system_logs(self) -> Optional[List[str]]:
+        """Fetch last 100 system log entries via plain text (no GraphQL for logs)."""
+        # show log command returns raw text
+        res = await self.show_text(["log"])
+        if res.startswith("Error:"):
+            return None
+        # Return last 50 lines as a list
+        lines = res.splitlines()
+        return lines[-50:]
+
+    async def get_active_connections(self) -> Optional[str]:
+        """Fetch active system connections via plain text."""
+        return await self.show_text(["conntrack", "statistics"])
+
     # ── Config modification (/configure endpoint) ──────────────────────────────
 
     async def set_config(self, path: List[str]) -> Dict[str, Any]:

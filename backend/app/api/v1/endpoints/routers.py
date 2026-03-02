@@ -157,6 +157,62 @@ async def get_router_config(
         "info": info_res.get("data") if info_res.get("success") else {},
     }
 
+@router.get("/{id}/routes")
+async def get_router_routes(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    id: int,
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Fetch live IPv4 routing table.
+    """
+    result = await db.execute(select(Router).where(Router.id == id))
+    router_obj = result.scalars().first()
+    if not router_obj:
+        raise HTTPException(status_code=404, detail="Router not found")
+
+    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
+    routes = await client.get_routing_table()
+    return routes or []
+
+@router.get("/{id}/logs")
+async def get_router_logs(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    id: int,
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Fetch last system logs.
+    """
+    result = await db.execute(select(Router).where(Router.id == id))
+    router_obj = result.scalars().first()
+    if not router_obj:
+        raise HTTPException(status_code=404, detail="Router not found")
+
+    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
+    logs = await client.get_system_logs()
+    return logs or []
+
+@router.get("/{id}/connections")
+async def get_router_connections(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    id: int,
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Fetch connection statistics.
+    """
+    result = await db.execute(select(Router).where(Router.id == id))
+    router_obj = result.scalars().first()
+    if not router_obj:
+        raise HTTPException(status_code=404, detail="Router not found")
+
+    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
+    stats = await client.get_active_connections()
+    return {"stats": stats}
 
 @router.delete("/{id}", response_model=RouterSchema)
 async def delete_router(

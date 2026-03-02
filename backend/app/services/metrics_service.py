@@ -5,6 +5,7 @@ from sqlalchemy.future import select
 
 from app.models.router import Router, RouterStatus
 from app.models.metrics import RouterMetrics
+from app.models.alert import Alert, AlertSeverity
 from app.services.vyos import VyOSClient
 from app.core.database import AsyncSessionLocal
 
@@ -18,11 +19,19 @@ class MetricsService:
             if not router:
                 return
 
+            old_status = router.status
             client = VyOSClient(hostname=router.hostname, api_key=router.api_key)
             test_res = await client.test_connection()
             is_online = test_res.get("success") is True
-            router.status = RouterStatus.ONLINE if is_online else RouterStatus.OFFLINE
+            new_status = RouterStatus.ONLINE if is_online else RouterStatus.OFFLINE
+            router.status = new_status
             router.last_seen = datetime.now(timezone.utc)
+
+            # Alert on status change
+            if old_status != RouterStatus.UNKNOWN and old_status != new_status:
+                severity = AlertSeverity.CRITICAL if new_status == RouterStatus.OFFLINE else AlertSeverity.INFO
+                message = f"Router '{router.name}' status changed to {new_status}"
+                db.add(Alert(router_id=router.id, severity=severity, message=message, alert_type="status_change"))
 
             if is_online:
                 try:
@@ -38,11 +47,9 @@ class MetricsService:
                     bgp_data = bgp_config_res.get("data") if bgp_config_res.get("success") else None
 
                     # Merge GraphQL interface counters into the config data
-                    # Counters is a list: [{"ifname": "eth0", "rx_bytes": N, "tx_bytes": N, ...}]
                     if isinstance(counters, list) and isinstance(iface_data, dict):
                         for counter in counters:
                             ifname = counter.get("ifname", "")
-                            # Find this interface in the config tree and attach counters
                             for iface_type, ifaces in iface_data.items():
                                 if isinstance(ifaces, dict) and ifname in ifaces:
                                     ifaces[ifname]["rx-bytes"] = counter.get("rx_bytes", 0)
@@ -50,40 +57,63 @@ class MetricsService:
                                     ifaces[ifname]["rx-packets"] = counter.get("rx_packets", 0)
                                     ifaces[ifname]["tx-packets"] = counter.get("tx_packets", 0)
 
-                    # Parse CPU/memory from GraphQL system info
+                    # Parse System Metrics from GraphQL
                     cpu_usage = 0.0
                     memory_usage = 0.0
-                    if isinstance(sys_info, dict):
-                        cpu_load = sys_info.get("cpu_load_average") or {}
-                        cpu_usage = float(cpu_load.get("one_minute", 0.0))
+                    uptime = 0
+                    load_avg = {"1m": 0.0, "5m": 0.0, "15m": 0.0}
+                    active_sessions = 0
 
+                    if isinstance(sys_info, dict):
+                        # CPU / Load
+                        cpu_load = sys_info.get("cpu_load_average") or {}
+                        load_avg = {
+                            "1m": float(cpu_load.get("one_minute", 0.0)),
+                            "5m": float(cpu_load.get("five_minute", 0.0)),
+                            "15m": float(cpu_load.get("fifteen_minute", 0.0))
+                        }
+                        cpu_usage = load_avg["1m"]
+                        
+                        # Memory
                         mem = sys_info.get("memory") or {}
                         total = mem.get("total", 0)
                         used = mem.get("used", 0)
                         if total and total > 0:
                             memory_usage = round(used / total * 100, 1)
+                            
+                        # Uptime
+                        uptime_str = sys_info.get("uptime", "0")
+                        try:
+                            uptime = int(uptime_str)
+                        except:
+                            uptime = 0
 
-                    # Log what we got on every poll
-                    print(
-                        f"[{router.name}] iface_config={iface_config_res.get('success')} "
-                        f"bgp={bgp_config_res.get('success')} "
-                        f"counters={'ok' if counters else 'n/a (no GraphQL)'} "
-                        f"sysinfo={'ok' if sys_info else 'n/a (no GraphQL)'}"
-                    )
-
+                    # Generate metrics record
                     metrics = RouterMetrics(
                         router_id=router.id,
                         interfaces=iface_data if isinstance(iface_data, dict) else None,
                         bgp_neighbors=bgp_data if isinstance(bgp_data, dict) else None,
                         cpu_usage=cpu_usage,
                         memory_usage=memory_usage,
+                        uptime=uptime,
+                        load_average=load_avg,
+                        active_sessions=active_sessions
                     )
                     db.add(metrics)
 
+                    # --- Alerts ---
+                    # CPU High
+                    if cpu_usage > 4.0: # Many VyOS systems show load relative to cores, use 4.0 as generic threshold for now
+                        db.add(Alert(router_id=router.id, severity=AlertSeverity.WARNING, message=f"High CPU Load ({cpu_usage}) on {router.name}", alert_type="cpu_high"))
+                    
+                    # Memory High
+                    if memory_usage > 90.0:
+                        db.add(Alert(router_id=router.id, severity=AlertSeverity.CRITICAL, message=f"Memory Critical ({memory_usage}%) on {router.name}", alert_type="mem_high"))
+                    elif memory_usage > 80.0:
+                        db.add(Alert(router_id=router.id, severity=AlertSeverity.WARNING, message=f"Memory High ({memory_usage}%) on {router.name}", alert_type="mem_high"))
+
                 except Exception as e:
-                    import traceback
                     print(f"Error collecting metrics for {router.name}: {e}")
-                    traceback.print_exc()
 
             db.add(router)
             await db.commit()
@@ -101,9 +131,7 @@ class MetricsService:
 async def run_metrics_collector():
     while True:
         try:
-            print("Starting metrics collection...")
             await MetricsService.collect_all_metrics()
-            print("Metrics collection completed.")
         except Exception as e:
             print(f"Metrics collection failed: {e}")
         await asyncio.sleep(30)

@@ -3,7 +3,10 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
-import { Plus, Router as RouterIcon, Signal, SignalLow, Trash2, RefreshCcw } from 'lucide-react';
+import { 
+  Plus, Router as RouterIcon, Signal, SignalLow, 
+  Trash2, RefreshCcw, MapPin, Activity, ChevronRight 
+} from 'lucide-react';
 import Navbar from '@/components/Navbar';
 
 interface Router {
@@ -52,8 +55,7 @@ export default function RoutersPage() {
       setNewRouter({ name: '', hostname: '', site: '', api_key: '' });
       fetchRouters();
     } catch (err: any) {
-      console.error('Failed to add router', err);
-      setError(err.response?.data?.detail || 'Failed to connect to router. Check hostname and API key.');
+      setError(err.response?.data?.detail || 'Failed to connect to router.');
     } finally {
       setSubmitting(false);
     }
@@ -61,14 +63,10 @@ export default function RoutersPage() {
 
   const testConnection = async (id: number) => {
     try {
-      const response = await api.post(`/routers/${id}/test-connection`);
-      if (response.data.is_online === false) {
-        alert(`Connection Failed: ${response.data.error || 'Unknown error'}`);
-      }
+      await api.post(`/routers/${id}/test-connection`);
       fetchRouters();
     } catch (err) {
-      console.error('Test connection failed', err);
-      alert('Failed to trigger connection test. Check your network.');
+      alert('Failed to trigger connection test.');
     }
   };
 
@@ -78,84 +76,103 @@ export default function RoutersPage() {
       await api.delete(`/routers/${id}`);
       fetchRouters();
     } catch (err) {
-      console.error('Failed to delete router', err);
       alert('Failed to delete router.');
     }
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen pt-24 pb-12 px-6 lg:px-12">
       <Navbar />
-      <div className="max-w-6xl mx-auto p-8">
-        <div className="flex justify-between items-center mb-8">
+      
+      <div className="max-w-7xl mx-auto">
+        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <RouterIcon className="w-8 h-8 text-blue-600" />
-              Router Registry
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400">Manage your VyOS instances</p>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="bg-primary/10 p-2 rounded-lg">
+                <Activity className="w-5 h-5 text-primary" />
+              </div>
+              <h1 className="text-3xl font-extrabold tracking-tight text-white">
+                Router <span className="text-primary">Registry</span>
+              </h1>
+            </div>
+            <p className="text-slate-400 font-medium">Monitoring and managing {routers.length} active instances.</p>
           </div>
           <button
             onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg font-medium transition"
+            className="btn-primary flex items-center gap-2 group"
           >
-            <Plus className="w-5 h-5" />
-            Add Router
+            <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
+            Add New Router
           </button>
-        </div>
+        </header>
 
         {loading ? (
-          <div className="flex justify-center py-20">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+          <div className="flex flex-col items-center justify-center py-32 opacity-50">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+            <p className="text-slate-400 font-medium">Syncing with registry...</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {routers.map((r) => (
-              <div key={r.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white">{r.name}</h3>
-                    <p className="text-sm text-gray-500">{r.hostname}</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className={`flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-                      r.status === 'online' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+              <div key={r.id} className="glass-card p-6 flex flex-col group">
+                <div className="flex justify-between items-start mb-6">
+                  <div className="flex items-center gap-4">
+                    <div className={`p-3 rounded-2xl ${
+                      r.status === 'online' ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'
                     }`}>
-                      {r.status === 'online' ? <Signal className="w-3 h-3" /> : <SignalLow className="w-3 h-3" />}
-                      {r.status.toUpperCase()}
+                      <RouterIcon className="w-6 h-6" />
                     </div>
-                    <button 
-                      onClick={() => handleDeleteRouter(r.id)}
-                      className="p-1 text-gray-400 hover:text-red-500 transition"
-                      title="Delete Router"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+                    <div>
+                      <h3 className="text-lg font-bold text-white group-hover:text-primary transition-colors">{r.name}</h3>
+                      <p className="text-sm text-slate-500 font-mono">{r.hostname}</p>
+                    </div>
+                  </div>
+                  <button 
+                    onClick={() => handleDeleteRouter(r.id)}
+                    className="p-2 text-slate-500 hover:text-danger hover:bg-danger/10 rounded-lg transition-all"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="space-y-4 mb-8">
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2 text-slate-400">
+                      <MapPin className="w-4 h-4" />
+                      <span>Location</span>
+                    </div>
+                    <span className="text-slate-200 font-semibold">{r.site || 'Remote'}</span>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-2 text-slate-400">
+                      <Signal className="w-4 h-4" />
+                      <span>Status</span>
+                    </div>
+                    <div className={`status-badge ${
+                      r.status === 'online' ? 'bg-success/10 text-success border-success/20' : 'bg-danger/10 text-danger border-danger/20'
+                    }`}>
+                      <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${
+                        r.status === 'online' ? 'bg-success' : 'bg-danger'
+                      }`} />
+                      {r.status}
+                    </div>
                   </div>
                 </div>
-                <div className="space-y-2 mb-6">
-                  <div className="text-sm text-gray-600 dark:text-gray-400 flex justify-between">
-                    <span>Site:</span>
-                    <span className="font-medium">{r.site || 'N/A'}</span>
-                  </div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400 flex justify-between">
-                    <span>Last Seen:</span>
-                    <span className="font-medium">{r.last_seen ? new Date(r.last_seen).toLocaleString() : 'Never'}</span>
-                  </div>
-                </div>
-                <div className="flex gap-2">
+
+                <div className="mt-auto flex gap-3">
                   <button 
                     onClick={() => testConnection(r.id)}
-                    className="flex-1 flex items-center justify-center gap-2 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 text-gray-700 dark:text-gray-200 py-2 rounded-lg text-sm font-medium transition"
+                    className="flex-1 btn-secondary flex items-center justify-center gap-2 text-sm"
                   >
                     <RefreshCcw className="w-4 h-4" />
-                    Test
+                    Ping
                   </button>
                   <button 
                     onClick={() => router.push(`/routers/${r.id}`)}
-                    className="flex-1 flex items-center justify-center gap-2 bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 text-blue-600 py-2 rounded-lg text-sm font-medium transition"
+                    className="flex-1 btn-primary flex items-center justify-center gap-2 text-sm group/btn"
                   >
-                    Dashboard
+                    Manage
+                    <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </button>
                 </div>
               </div>
@@ -165,78 +182,76 @@ export default function RoutersPage() {
 
         {/* Add Router Modal */}
         {showAddModal && (
-          <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full p-8 shadow-2xl">
-              <h2 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">Add New Router</h2>
+          <div className="fixed inset-0 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+            <div className="glass-modal max-w-md w-full p-8">
+              <div className="flex items-center gap-3 mb-8">
+                <div className="bg-primary/20 p-2 rounded-lg">
+                  <Plus className="w-6 h-6 text-primary" />
+                </div>
+                <h2 className="text-2xl font-bold text-white">Register Router</h2>
+              </div>
               
               {error && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg">
+                <div className="mb-6 p-4 bg-danger/10 border border-danger/20 text-danger text-sm rounded-xl font-medium">
                   {error}
                 </div>
               )}
 
-              <form onSubmit={handleAddRouter} className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Router Name</label>
+              <form onSubmit={handleAddRouter} className="space-y-5">
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-400 uppercase tracking-wider ml-1">Friendly Name</label>
                   <input
                     required
-                    className="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 py-2 px-3 focus:ring-2 focus:ring-blue-600 outline-none"
-                    placeholder="Edge-01"
+                    className="w-full bg-dark-900/50 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-white placeholder:text-slate-600"
+                    placeholder="e.g. Core-Edge-01"
                     value={newRouter.name}
                     onChange={(e) => setNewRouter({...newRouter, name: e.target.value})}
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Hostname / IP</label>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-400 uppercase tracking-wider ml-1">IP / Hostname</label>
                   <input
                     required
-                    className="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 py-2 px-3 focus:ring-2 focus:ring-blue-600 outline-none"
-                    placeholder="192.168.1.1"
+                    className="w-full bg-dark-900/50 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-white placeholder:text-slate-600"
+                    placeholder="10.0.0.1 or vyos.local"
                     value={newRouter.hostname}
                     onChange={(e) => setNewRouter({...newRouter, hostname: e.target.value})}
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Site</label>
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-slate-400 uppercase tracking-wider ml-1">Site / Region</label>
                   <input
-                    className="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 py-2 px-3 focus:ring-2 focus:ring-blue-600 outline-none"
-                    placeholder="UAE-DC1"
+                    className="w-full bg-dark-900/50 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-white placeholder:text-slate-600"
+                    placeholder="e.g. London-DC"
                     value={newRouter.site}
                     onChange={(e) => setNewRouter({...newRouter, site: e.target.value})}
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">API Key</label>
+                <div className="space-y-2 pb-4">
+                  <label className="text-sm font-bold text-slate-400 uppercase tracking-wider ml-1">API Key</label>
                   <input
                     required
                     type="password"
-                    className="w-full rounded-lg border-gray-300 dark:border-gray-600 dark:bg-gray-700 py-2 px-3 focus:ring-2 focus:ring-blue-600 outline-none"
-                    placeholder="Enter VyOS API Key"
+                    className="w-full bg-dark-900/50 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-white placeholder:text-slate-600"
+                    placeholder="••••••••••••"
                     value={newRouter.api_key}
                     onChange={(e) => setNewRouter({...newRouter, api_key: e.target.value})}
                   />
                 </div>
-                <div className="flex gap-3 mt-8">
+                <div className="flex gap-4 pt-4">
                   <button
                     type="button"
                     onClick={() => setShowAddModal(false)}
-                    className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-700 dark:text-gray-300 font-medium hover:bg-gray-50 transition"
+                    className="flex-1 btn-secondary"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-500 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    className="flex-1 btn-primary"
                   >
-                    {submitting ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        Saving...
-                      </>
-                    ) : (
-                      'Save Router'
-                    )}
+                    {submitting ? 'Registering...' : 'Register Router'}
                   </button>
                 </div>
               </form>

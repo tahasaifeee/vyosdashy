@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
+import { Router as RouterIcon, Lock, Mail, ShieldCheck } from 'lucide-react';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -15,76 +16,103 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError('');
+    
+    const formData = new FormData();
+    formData.append('username', email);
+    formData.append('password', password);
 
     try {
-      const formData = new FormData();
-      formData.append('username', email);
-      formData.append('password', password);
-
       const response = await api.post('/login/access-token', formData);
       localStorage.setItem('token', response.data.access_token);
       router.push('/routers');
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Login failed. Please check your credentials.');
+      setError(err.response?.data?.detail || 'Invalid email or password');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900 px-4">
-      <div className="w-full max-w-md space-y-8">
-        <div>
-          <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
-            VyOS UI Manager
-          </h2>
-          <p className="mt-2 text-center text-sm text-gray-600 dark:text-gray-400">
-            Sign in to manage your routers
-          </p>
+    <div className="min-h-screen flex items-center justify-center p-6">
+      <div className="max-w-md w-full">
+        {/* Logo & Header */}
+        <div className="text-center mb-10">
+          <div className="inline-flex items-center justify-center bg-primary/20 p-4 rounded-3xl mb-6 shadow-glow">
+            <RouterIcon className="w-10 h-10 text-primary" />
+          </div>
+          <h1 className="text-4xl font-extrabold text-white tracking-tight mb-2">
+            VyOS <span className="text-primary">Dashy</span>
+          </h1>
+          <p className="text-slate-400 font-medium">Secure infrastructure management</p>
         </div>
-        <form className="mt-8 space-y-6" onSubmit={handleLogin}>
+
+        {/* Login Card */}
+        <div className="glass-modal p-8 shadow-2xl">
+          <div className="flex items-center gap-3 mb-8">
+            <div className="bg-white/5 p-2 rounded-lg">
+              <ShieldCheck className="w-5 h-5 text-slate-400" />
+            </div>
+            <h2 className="text-xl font-bold text-white">Authentication</h2>
+          </div>
+
           {error && (
-            <div className="rounded-md bg-red-50 p-4 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-400">
+            <div className="mb-6 p-4 bg-danger/10 border border-danger/20 text-danger text-sm rounded-xl font-medium animate-shake">
               {error}
             </div>
           )}
-          <div className="-space-y-px rounded-md shadow-sm">
-            <div>
-              <input
-                id="email-address"
-                name="email"
-                type="email"
-                required
-                className="relative block w-full rounded-t-md border-0 py-1.5 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                placeholder="Email address"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-              />
-            </div>
-            <div>
-              <input
-                id="password"
-                name="password"
-                type="password"
-                required
-                className="relative block w-full rounded-b-md border-0 py-1.5 px-3 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-blue-600 sm:text-sm sm:leading-6"
-                placeholder="Password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-              />
-            </div>
-          </div>
 
-          <div>
+          <form onSubmit={handleLogin} className="space-y-6">
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-slate-400 uppercase tracking-wider ml-1">Email Address</label>
+              <div className="relative group">
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-primary transition-colors" />
+                <input
+                  type="email"
+                  required
+                  className="w-full bg-dark-900/50 border border-white/10 rounded-xl py-3.5 pl-12 pr-4 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-white placeholder:text-slate-600"
+                  placeholder="admin@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-slate-400 uppercase tracking-wider ml-1">Password</label>
+              <div className="relative group">
+                <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500 group-focus-within:text-primary transition-colors" />
+                <input
+                  type="password"
+                  required
+                  className="w-full bg-dark-900/50 border border-white/10 rounded-xl py-3.5 pl-12 pr-4 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-white placeholder:text-slate-600"
+                  placeholder="••••••••••••"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                />
+              </div>
+            </div>
+
             <button
               type="submit"
               disabled={loading}
-              className="group relative flex w-full justify-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 disabled:opacity-50"
+              className="w-full btn-primary py-4 mt-4 text-lg"
             >
-              {loading ? 'Signing in...' : 'Sign in'}
+              {loading ? (
+                <div className="flex items-center justify-center gap-3">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                  <span>Verifying...</span>
+                </div>
+              ) : (
+                'Sign In'
+              )}
             </button>
-          </div>
-        </form>
+          </form>
+        </div>
+
+        {/* Footer info */}
+        <p className="mt-10 text-center text-slate-500 text-sm font-medium">
+          Protected by end-to-end encryption.
+        </p>
       </div>
     </div>
   );

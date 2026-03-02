@@ -16,6 +16,7 @@ async def lifespan(app: FastAPI):
         from app.models.user import User
         from app.models.router import Router
         from app.models.metrics import RouterMetrics
+        from app.models.alert import Alert
         await conn.run_sync(Base.metadata.create_all)
         
     # Start background tasks
