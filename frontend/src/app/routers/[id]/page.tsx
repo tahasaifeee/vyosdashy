@@ -6,9 +6,10 @@ import api from '@/lib/api';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area 
 } from 'recharts';
-import { 
-  Activity, ArrowDown, ArrowUp, Cpu, HardDrive, Network, Server, ShieldCheck 
+import {
+  Activity, ArrowDown, ArrowUp, Cpu, HardDrive, Network, Server, ShieldCheck
 } from 'lucide-react';
+import Navbar from '@/components/Navbar';
 
 export default function RouterDashboard() {
   const { id } = useParams();
@@ -156,8 +157,9 @@ export default function RouterDashboard() {
   );
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 p-8">
-      <div className="max-w-7xl mx-auto">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <Navbar />
+      <div className="max-w-7xl mx-auto p-8">
         {/* Header */}
         <div className="flex justify-between items-end mb-8">
           <div>
