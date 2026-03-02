@@ -22,10 +22,20 @@ export default function RouterDashboard() {
   const fetchData = async () => {
     try {
       console.log('Fetching data for router:', id);
+      
       const [infoRes, latestRes, historyRes] = await Promise.all([
-        api.get(`/routers/${id}`).catch(e => { console.error('Info API Error:', e); throw e; }),
-        api.get(`/metrics/${id}/latest`).catch(e => { console.error('Latest Metrics API Error:', e); throw e; }),
-        api.get(`/metrics/${id}/history?limit=30`).catch(e => { console.error('History Metrics API Error:', e); throw e; })
+        api.get(`/routers/${id}`).catch(e => {
+          console.error('Info API Error:', e);
+          throw e;
+        }),
+        api.get(`/metrics/${id}/latest`).catch(e => {
+          console.error('Latest Metrics API Error:', e);
+          throw e;
+        }),
+        api.get(`/metrics/${id}/history?limit=30`).catch(e => {
+          console.error('History Metrics API Error:', e);
+          throw e;
+        })
       ]);
       const latestData = latestRes.data;
       setRouterInfo(infoRes.data);
