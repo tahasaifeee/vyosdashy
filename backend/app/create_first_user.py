@@ -11,9 +11,15 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.core.config import settings
 from app.core import security
 from app.models.user import User
+from app.core.database import Base
 
 async def create_user(email, password, full_name, role):
     engine = create_async_engine(str(settings.DATABASE_URL))
+    
+    # Ensure tables are created
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
     async with async_session() as session:
