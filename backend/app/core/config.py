@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     POSTGRES_PASSWORD: str
     POSTGRES_DB: str
     DATABASE_URL: Optional[PostgresDsn] = None
+    REDIS_URL: Optional[str] = "redis://redis:6379/0"
 
     @validator("DATABASE_URL", pre=True)
     def assemble_db_connection(cls, v: Optional[str], values: Dict[str, Any]) -> Any:
@@ -37,9 +38,11 @@ class Settings(BaseSettings):
             path=f"/{values.get('POSTGRES_DB') or ''}",
         )
 
-    class Config:
-        case_sensitive = True
-        env_file = ".env"
+    model_config = {
+        "case_sensitive": True,
+        "env_file": ".env",
+        "extra": "ignore"
+    }
 
 
 settings = Settings()
