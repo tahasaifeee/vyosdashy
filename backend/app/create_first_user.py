@@ -24,25 +24,27 @@ async def create_user(email, password, full_name, role):
     
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
+    normalized_email = email.lower()
+
     async with async_session() as session:
         # Check if user already exists
-        stmt = select(User).where(User.email == email)
+        stmt = select(User).where(User.email == normalized_email)
         result = await session.execute(stmt)
         user = result.scalars().first()
 
         if user:
-            print(f"User with email {email} already exists. Updating password...")
+            print(f"User with email {normalized_email} already exists. Updating password...")
             user.hashed_password = security.get_password_hash(password)
             user.full_name = full_name
             user.role = role
             user.is_superuser = (role == "admin")
             await session.commit()
-            print(f"User {email} updated successfully!")
+            print(f"User {normalized_email} updated successfully!")
             return
 
         # Create new user
         new_user = User(
-            email=email,
+            email=normalized_email,
             hashed_password=security.get_password_hash(password),
             full_name=full_name,
             role=role,

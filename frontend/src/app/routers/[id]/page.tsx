@@ -28,22 +28,43 @@ function getIfaceRx(d: any) {
 function getIfaceTx(d: any) {
   return parseInt(d?.['tx-bytes'] ?? d?.stats?.tx_bytes ?? 0) || 0;
 }
-function getIfaceRxPackets(d: any) {
-  return parseInt(d?.['rx-packets'] ?? d?.stats?.rx_packets ?? 0) || 0;
+function getIfaceRx(d: any) {
+  const val = d?.['rx-bytes'] ?? d?.stats?.rx_bytes ?? 0;
+  return typeof val === 'string' ? parseInt(val.replace(/,/g, '')) : parseInt(val);
 }
-function getIfaceTxPackets(d: any) {
-  return parseInt(d?.['tx-packets'] ?? d?.stats?.tx_packets ?? 0) || 0;
+function getIfaceTx(d: any) {
+  const val = d?.['tx-bytes'] ?? d?.stats?.tx_bytes ?? 0;
+  return typeof val === 'string' ? parseInt(val.replace(/,/g, '')) : parseInt(val);
 }
-
 function sumIfaceBytes(interfaces: any) {
   let rx = 0, tx = 0;
-  if (!interfaces) return { rx, tx };
+  if (!interfaces || typeof interfaces !== 'object') return { rx, tx };
+
   const root = getIfaceRoot(interfaces);
-  Object.values(root).forEach((ifaces: any) => {
-    if (typeof ifaces !== 'object') return;
-    Object.values(ifaces).forEach((iface: any) => { rx += getIfaceRx(iface); tx += getIfaceTx(iface); });
+  // Iterate through categories (ethernet, loopback, etc.)
+  Object.values(root).forEach((category: any) => {
+    if (!category || typeof category !== 'object') return;
+    // Iterate through individual interfaces (eth0, eth1, etc.)
+    Object.values(category).forEach((iface: any) => {
+      if (!iface || typeof iface !== 'object') return;
+      rx += getIfaceRx(iface);
+      tx += getIfaceTx(iface);
+    });
   });
+
+  // Fallback for flat structures
+  if (rx === 0 && tx === 0) {
+    Object.values(interfaces).forEach((iface: any) => {
+      if (iface && typeof iface === 'object' && (iface['rx-bytes'] || iface['tx-bytes'])) {
+        rx += getIfaceRx(iface);
+        tx += getIfaceTx(iface);
+      }
+    });
+  }
+
   return { rx, tx };
+}
+
 }
 
 function extractBgpNeighbors(raw: any): Record<string, any> | null {

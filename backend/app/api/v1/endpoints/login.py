@@ -23,7 +23,8 @@ async def login_access_token(
     OAuth2 compatible token login, get an access token for future requests
     """
     # Authenticate user
-    stmt = select(User).where(User.email == form_data.username)
+    normalized_email = form_data.username.lower()
+    stmt = select(User).where(User.email == normalized_email)
     result = await db.execute(stmt)
     user = result.scalars().first()
 
