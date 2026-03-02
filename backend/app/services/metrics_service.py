@@ -25,24 +25,54 @@ class MetricsService:
 
             if is_online:
                 try:
-                    interfaces_res = await client.get_interface_stats()
-                    bgp_res = await client.get_bgp_summary()
+                    interfaces_res, bgp_res, resources_res = await asyncio.gather(
+                        client.get_interface_stats(),
+                        client.get_bgp_summary(),
+                        client.get_resource_usage(),
+                    )
 
                     iface_data = interfaces_res.get("data")
                     bgp_data = bgp_res.get("data") if bgp_res.get("success") else None
+                    resources_data = resources_res.get("data")
 
-                    # Log what we got so issues are visible in `docker logs`
-                    print(f"[{router.name}] interfaces success={interfaces_res.get('success')}, "
-                          f"data_type={type(iface_data).__name__}")
+                    # Log every poll so `docker logs` shows exactly what VyOS returns
+                    print(f"[{router.name}] ifaces={interfaces_res.get('success')} "
+                          f"type={type(iface_data).__name__} | "
+                          f"bgp={bgp_res.get('success')} | "
+                          f"resources={resources_res.get('success')} "
+                          f"type={type(resources_data).__name__}")
                     if not interfaces_res.get("success"):
-                        print(f"[{router.name}] interfaces error: {interfaces_res.get('error')}")
+                        print(f"[{router.name}] ifaces error: {interfaces_res.get('error')}")
+                    if resources_data:
+                        print(f"[{router.name}] resources sample: {str(resources_data)[:200]}")
+
+                    # Parse CPU/memory if resources returned a structured dict
+                    cpu_usage = 0.0
+                    memory_usage = 0.0
+                    if isinstance(resources_data, dict):
+                        # VyOS may return: {"cpu-load": {"1min": 0.45}, "memory": {"used": ..., "total": ...}}
+                        cpu_load = resources_data.get("cpu-load") or resources_data.get("cpu_load", {})
+                        if isinstance(cpu_load, dict):
+                            cpu_usage = float(cpu_load.get("1min") or cpu_load.get("one-min", 0.0))
+                        mem = resources_data.get("memory", {})
+                        if isinstance(mem, dict):
+                            used = mem.get("used", "")
+                            total = mem.get("total", "")
+                            # Values may be strings like "2.3 GB" or raw integers
+                            try:
+                                u = float(str(used).split()[0])
+                                t = float(str(total).split()[0])
+                                if t > 0:
+                                    memory_usage = round(u / t * 100, 1)
+                            except (ValueError, IndexError):
+                                pass
 
                     metrics = RouterMetrics(
                         router_id=router.id,
                         interfaces=iface_data if isinstance(iface_data, dict) else None,
                         bgp_neighbors=bgp_data if isinstance(bgp_data, dict) else None,
-                        cpu_usage=0.0,
-                        memory_usage=0.0,
+                        cpu_usage=cpu_usage,
+                        memory_usage=memory_usage,
                     )
                     db.add(metrics)
                 except Exception as e:

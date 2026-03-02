@@ -81,7 +81,11 @@ class VyOSClient:
         return await self.get_config(["interfaces"])
 
     async def get_bgp_summary(self) -> Dict[str, Any]:
-        """Fetch BGP summary (neighbors and status)"""
+        """Fetch BGP summary. VyOS 1.4+ (FRR) uses 'show bgp summary';
+        older XORP-based used 'show ip bgp summary'. Try both."""
+        result = await self.show_op(["bgp", "summary"])
+        if result.get("success") and result.get("data"):
+            return result
         return await self.show_op(["ip", "bgp", "summary"])
 
     async def get_system_uptime(self) -> Dict[str, Any]:
