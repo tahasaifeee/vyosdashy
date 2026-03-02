@@ -14,14 +14,37 @@ A modern web dashboard for managing multiple VyOS router instances via their RES
 - **Backend**: FastAPI (Python), SQLAlchemy (PostgreSQL), Pydantic
 - **Infrastructure**: Docker Compose, Redis (for future tasks)
 
-## How to Run
+## Quick Start (Production/Server)
 
-### 1. Prerequisites
-- Docker & Docker Compose
-- Node.js (for local development)
-- Python 3.11+ (for local development)
+We've provided a master setup script that handles environment configuration and Docker deployment.
 
-### 2. Launch with Docker
+1.  **Clone the repository:**
+    ```bash
+    git clone <repository-url>
+    cd vyosdashy
+    ```
+
+2.  **Run the setup script:**
+    ```bash
+    chmod +x setup.sh
+    ./setup.sh
+    ```
+    The script will:
+    *   Ask for project details (Postgres credentials, CORS, etc.).
+    *   Generate a secure `SECRET_KEY`.
+    *   Create the necessary `.env` files.
+    *   Optionally start the application using Docker Compose.
+
+3.  **Access the application:**
+    *   Frontend: `http://your-server-ip:3000`
+    *   Backend API: `http://your-server-ip:8000`
+    *   API Docs: `http://your-server-ip:8000/docs`
+
+## Manual Development Setup
+
+If you prefer to run services manually for development:
+
+### 1. Launch with Docker
 ```bash
 docker-compose up --build
 ```
@@ -31,7 +54,7 @@ This will start:
 - Backend (Port 8000)
 - Frontend (Port 3000)
 
-### 3. Setup First User
+### 2. Setup First User
 Since there is no "Sign Up" page in Phase 1 (for security), you can create the first user via the API docs at `http://localhost:8000/docs#/users/create_user_api_v1_users__post`.
 
 Or via `curl`:
@@ -44,10 +67,11 @@ curl -X POST "http://localhost:8000/api/v1/users/" -H "Content-Type: application
 }'
 ```
 
-### 4. Access UI
+### 3. Access UI
 Go to `http://localhost:3000/login` and sign in with the user you created.
 
 ## Project Structure
 - `/backend`: FastAPI application
 - `/frontend`: Next.js application
 - `docker-compose.yml`: Orchestration
+- `setup.sh`: Automated configuration script
