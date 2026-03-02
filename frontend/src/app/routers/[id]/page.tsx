@@ -467,7 +467,7 @@ export default function RouterDashboard() {
                 {/* ── Summary Bar ── */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
                   <SummaryCard 
-                    label="CPU Compute" 
+                    label="Compute Load" 
                     value={<AnimatedNumber value={latest?.cpu_usage || 0} format={v => `${v}%`} />} 
                     subValue={`Load: ${latest?.load_average?.['1m'] || 0}`}
                     icon={<Cpu className="w-5 h-5" />}
@@ -477,24 +477,25 @@ export default function RouterDashboard() {
                   <SummaryCard 
                     label="Memory Usage" 
                     value={<AnimatedNumber value={latest?.memory_usage || 0} format={v => `${v}%`} />} 
-                    subValue="Available: 2.4GB"
+                    subValue="System RAM"
                     icon={<Activity className="w-5 h-5" />}
                     progress={latest?.memory_usage || 0}
                     color="success"
                   />
                   <SummaryCard 
-                    label="Links Status" 
-                    value={`${ifaceStats.up}/${ifaceStats.total}`} 
-                    subValue="Links Up"
-                    icon={<Network className="w-5 h-5" />}
-                    progress={(ifaceStats.up / ifaceStats.total) * 100}
+                    label="Disk Storage" 
+                    value={<AnimatedNumber value={latest?.disk_usage || 0} format={v => `${v}%`} />} 
+                    subValue="Root Partition"
+                    icon={<HardDrive className="w-5 h-5" />}
+                    progress={latest?.disk_usage || 0}
                     color="info"
                   />
-                  <SidebarSummaryCard 
-                    label="BGP Peers" 
+                  <SummaryCard 
+                    label="Network Stack" 
                     value={<AnimatedNumber value={configStatus?.bgpPeers || 0} />} 
-                    subValue="Sessions Established"
+                    subValue="BGP Peers"
                     icon={<GitBranch className="w-5 h-5" />}
+                    progress={configStatus?.bgpPeers ? 100 : 0}
                     color="warning"
                   />
                 </div>

@@ -25,6 +25,7 @@ async def lifespan(app: FastAPI):
             await conn.execute(text("ALTER TABLE router_metrics ADD COLUMN IF NOT EXISTS load_average JSON"))
             await conn.execute(text("ALTER TABLE router_metrics ADD COLUMN IF NOT EXISTS active_sessions INTEGER DEFAULT 0"))
             await conn.execute(text("ALTER TABLE router_metrics ADD COLUMN IF NOT EXISTS uptime INTEGER DEFAULT 0"))
+            await conn.execute(text("ALTER TABLE router_metrics ADD COLUMN IF NOT EXISTS disk_usage FLOAT DEFAULT 0.0"))
         except Exception as e:
             print(f"Migration notice: {e}")
         

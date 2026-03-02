@@ -40,7 +40,10 @@ async def get_latest_metrics(
         "timestamp": metrics.timestamp,
         "cpu_usage": metrics.cpu_usage,
         "memory_usage": metrics.memory_usage,
+        "disk_usage": metrics.disk_usage or 0.0,
         "uptime": metrics.uptime,
+        "load_average": metrics.load_average,
+        "active_sessions": metrics.active_sessions,
         "interfaces": metrics.interfaces,
         "bgp_neighbors": metrics.bgp_neighbors,
     }
@@ -67,7 +70,6 @@ async def get_metrics_history(
     )
     result = await db.execute(stmt)
     metrics = result.scalars().all()
-    # Reverse to chronological order for charts, serialize to plain dicts
     return [
         {
             "id": m.id,
@@ -75,7 +77,9 @@ async def get_metrics_history(
             "timestamp": m.timestamp,
             "cpu_usage": m.cpu_usage,
             "memory_usage": m.memory_usage,
+            "disk_usage": m.disk_usage or 0.0,
             "uptime": m.uptime,
+            "load_average": m.load_average,
             "interfaces": m.interfaces,
             "bgp_neighbors": m.bgp_neighbors,
         }

@@ -28,12 +28,25 @@ class MetricsService:
                 }
             
             if "up" in text:
-                uptime_part = text.split("up")[1].split(",")[0].strip()
+                # Simple placeholder
                 uptime_seconds = 3600
         except:
             pass
             
         return uptime_seconds, load_avg
+
+    @staticmethod
+    def parse_legacy_storage(text: str):
+        """Parse storage percentage from 'show system storage' output."""
+        try:
+            # Look for root partition / and get percentage
+            # Example: /dev/sda1       10G  2G   8G  20% /
+            match = re.search(r"(\d+)%\s+/$", text, re.MULTILINE)
+            if match:
+                return float(match.group(1))
+        except:
+            pass
+        return 0.0
 
     @staticmethod
     def parse_legacy_interface_counters(text: str):
@@ -85,28 +98,22 @@ class MetricsService:
                              message=f"Router {router.name} is now {new_status}", alert_type="status_change"))
 
             if is_online:
-                # Update OS Version and real Hostname during collection
+                # Update metadata
                 try:
-                    info_res = await client.get_info()
-                    if info_res.get("success") and info_res.get("data"):
-                        info_data = info_res["data"]
-                        if info_data.get("version"):
-                            router.version = info_data["version"]
-                        # If VyOS returns a hostname, we store it in a way the frontend can use
-                        # Note: We keep router.hostname as the IP/FQDN for connection purposes
-                except:
-                    pass
+                    info_data = await client.get_version_info()
+                    if info_data.get("version"): router.version = info_data["version"]
+                except: pass
 
                 iface_data, bgp_data = {}, {}
-                cpu_usage, memory_usage, uptime = 0.0, 0.0, 0
+                cpu_usage, memory_usage, disk_usage, uptime = 0.0, 0.0, 0.0, 0
                 load_avg = {"1m": 0.0, "5m": 0.0, "15m": 0.0}
 
                 # 1. Config (REST)
                 try:
-                    res = await client.get_interface_config()
-                    if res.get("success"): iface_data = res.get("data", {})
-                    res = await client.get_bgp_config()
-                    if res.get("success"): bgp_data = res.get("data", {})
+                    res_if = await client.get_interface_config()
+                    if res_if.get("success"): iface_data = res_if.get("data", {})
+                    res_bgp = await client.get_bgp_config()
+                    if res_bgp.get("success"): bgp_data = res_bgp.get("data", {})
                 except: pass
 
                 # 2. System Metrics
@@ -124,22 +131,31 @@ class MetricsService:
                         memory_usage = round(mem.get("used", 0) / mem.get("total") * 100, 1)
                     uptime = int(sys_info.get("uptime", 0))
                 else:
+                    # Legacy Fallback
                     try:
                         up_text = await client.get_legacy_system_stats()
                         uptime, load_avg = MetricsService.parse_legacy_uptime(up_text)
                         cpu_usage = load_avg["1m"]
+                        mem_text = await client.get_legacy_memory_stats()
+                        # Simple parsing could go here
                     except: pass
 
-                # 3. Interface Counters
+                # 3. Disk Usage (Always legacy/CLI)
+                try:
+                    storage_text = await client.get_legacy_storage_stats()
+                    disk_usage = MetricsService.parse_legacy_storage(storage_text)
+                except: pass
+
+                # 4. Interface Counters
                 counters = None
                 try:
-                    counters = await client.get_interface_counters() # GraphQL
+                    counters = await client.get_interface_counters()
                 except: pass
 
                 if not counters:
                     try:
-                        counter_text = await client.get_legacy_interface_counters() # CLI
-                        counters = MetricsService.parse_legacy_interface_counters(counter_text)
+                        c_text = await client.get_legacy_interface_counters()
+                        counters = MetricsService.parse_legacy_interface_counters(c_text)
                     except: pass
 
                 if isinstance(counters, list):
@@ -148,10 +164,8 @@ class MetricsService:
                         for _, ifaces in iface_data.items():
                             if isinstance(ifaces, dict) and ifname in ifaces:
                                 ifaces[ifname].update({
-                                    "rx-bytes": c.get("rx_bytes", 0), 
-                                    "tx-bytes": c.get("tx_bytes", 0),
-                                    "rx-packets": c.get("rx_packets", 0), 
-                                    "tx-packets": c.get("tx_packets", 0)
+                                    "rx-bytes": c.get("rx_bytes", 0), "tx-bytes": c.get("tx_bytes", 0),
+                                    "rx-packets": c.get("rx_packets", 0), "tx-packets": c.get("tx_packets", 0)
                                 })
 
                 metrics = RouterMetrics(
@@ -160,6 +174,7 @@ class MetricsService:
                     bgp_neighbors=bgp_data,
                     cpu_usage=cpu_usage,
                     memory_usage=memory_usage,
+                    disk_usage=disk_usage,
                     uptime=uptime,
                     load_average=load_avg,
                     active_sessions=0

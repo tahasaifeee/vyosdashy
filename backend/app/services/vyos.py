@@ -192,6 +192,11 @@ class VyOSClient:
         """Fetch memory usage via CLI text."""
         return await self.show_text(["system", "memory"])
 
+    async def get_legacy_storage_stats(self) -> str:
+        """Fetch disk usage via CLI text."""
+        # 'df' is available in VyOS CLI as 'show system storage' or similar
+        return await self.show_text(["system", "storage"])
+
     async def get_legacy_interface_stats(self) -> str:
         """Fetch interface statistics via CLI text."""
         return await self.show_text(["interfaces"])
