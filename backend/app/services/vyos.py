@@ -158,6 +158,20 @@ class VyOSClient:
             return None
         return result.get("data", {}).get("ShowSystemInformation", {}).get("result")
 
+    # ── Legacy Operational Data (VyOS 1.3 / No GraphQL) ───────────────────────
+
+    async def get_legacy_system_stats(self) -> str:
+        """Fetch system uptime and load average via CLI text."""
+        return await self.show_text(["system", "uptime"])
+
+    async def get_legacy_memory_stats(self) -> str:
+        """Fetch memory usage via CLI text."""
+        return await self.show_text(["system", "memory"])
+
+    async def get_legacy_interface_stats(self) -> str:
+        """Fetch interface statistics via CLI text."""
+        return await self.show_text(["interfaces"])
+
     # ── Advanced Insights (Phase 3) ──────────────────────────────────────────
 
     async def get_routing_table(self) -> Optional[List[Dict[str, Any]]]:
