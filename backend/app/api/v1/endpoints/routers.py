@@ -148,14 +148,30 @@ async def get_router_config(
         raise HTTPException(status_code=404, detail="Router not found")
 
     client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
-    config_res, info_res = await asyncio.gather(
+
+    # Run fetches concurrently
+    config_res, info_data = await asyncio.gather(
         client.get_config([]),
-        client.get_info(),
+        client.get_version_info(),
     )
+
+    config_data = config_res.get("data") if config_res.get("success") else {}
+
+    # Ensure hostname is populated from config if not in info
+    if not info_data.get("hostname") and config_data.get("system", {}).get("host-name"):
+        info_data["hostname"] = config_data["system"]["host-name"]
+
+    # Update database version if we found it
+    if info_data.get("version") and info_data["version"] != "Unknown":
+        router_obj.version = info_data["version"]
+        db.add(router_obj)
+        await db.commit()
+
     return {
-        "config": config_res.get("data") if config_res.get("success") else {},
-        "info": info_res.get("data") if info_res.get("success") else {},
+        "config": config_data,
+        "info": info_data,
     }
+
 
 @router.get("/{id}/info")
 async def get_router_info_proxy(

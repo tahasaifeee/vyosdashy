@@ -72,12 +72,30 @@ class VyOSClient:
         try:
             async with httpx.AsyncClient(verify=self.verify, timeout=5.0) as client:
                 response = await client.get(f"{self.base_url}/info", params=params)
-                response.raise_for_status()
-                result = response.json()
-                # VyOS returns { "success": true, "data": { ... }, "error": null }
-                return result
-        except Exception as e:
-            return {"success": False, "data": None, "error": str(e)}
+                if response.status_code == 200:
+                    return response.json()
+        except:
+            pass
+        return {"success": False, "data": None}
+
+    async def get_version_info(self) -> Dict[str, Any]:
+        """Robustly fetch version and hostname using multiple fallback methods."""
+        # 1. Try /info endpoint
+        res = await self.get_info()
+        if res.get("success") and res.get("data"):
+            return res["data"]
+        
+        # 2. Fallback: Parse 'show version' text
+        version_text = await self.show_text(["version"])
+        info = {"version": "Unknown", "hostname": None}
+        
+        if version_text and not version_text.startswith("Error:"):
+            # Extract Version
+            ver_match = re.search(r"Version:\s+(.+)", version_text)
+            if ver_match:
+                info["version"] = ver_match.group(1).strip()
+        
+        return info
 
     async def test_connection(self) -> Dict[str, Any]:
         """Test API connectivity and key validity."""
