@@ -162,16 +162,17 @@ async def get_router_config(
         info_data["hostname"] = config_data["system"]["host-name"]
 
     # Update database version if we found it
-    if info_data.get("version") and info_data["version"] != "Unknown":
+    if info_data.get("version") and info_data["version"] != "N/A":
         router_obj.version = info_data["version"]
         db.add(router_obj)
         await db.commit()
+        await db.refresh(router_obj)
 
     return {
         "config": config_data,
         "info": info_data,
+        "db_router": router_obj # Pass the refreshed router object
     }
-
 
 from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, status, Request
 from fastapi.responses import JSONResponse
