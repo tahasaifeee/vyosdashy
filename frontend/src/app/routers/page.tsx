@@ -7,8 +7,8 @@ import { Plus, Router as RouterIcon, Signal, SignalLow, Trash2, RefreshCcw } fro
 
 interface Router {
   id: number;
-  name: str;
-  hostname: str;
+  name: string;
+  hostname: string;
   site: string;
   status: string;
   is_enabled: boolean;

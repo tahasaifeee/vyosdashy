@@ -6,9 +6,18 @@ from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.api.api import api_router
 from app.services.metrics_service import run_metrics_collector
+from app.core.database import Base, engine
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Ensure all tables are created
+    async with engine.begin() as conn:
+        # We need to import models here to ensure they are registered with Base.metadata
+        from app.models.user import User
+        from app.models.router import Router
+        from app.models.metrics import RouterMetrics
+        await conn.run_sync(Base.metadata.create_all)
+        
     # Start background tasks
     task = asyncio.create_task(run_metrics_collector())
     yield
@@ -26,16 +35,22 @@ app = FastAPI(
 )
 
 # Set all CORS enabled origins
-# For on-prem and maximum compatibility, we allow everything.
-# We set allow_credentials=False because we use Bearer tokens in headers,
-# which doesn't require the 'Credentials' flag like Cookies do.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+if settings.BACKEND_CORS_ORIGINS:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 

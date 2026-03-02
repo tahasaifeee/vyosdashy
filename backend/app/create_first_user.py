@@ -11,6 +11,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from app.core.config import settings
 from app.core import security
 from app.models.user import User
+from app.models.router import Router
+from app.models.metrics import RouterMetrics
 from app.core.database import Base
 
 async def create_user(email, password, full_name, role):
