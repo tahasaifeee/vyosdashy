@@ -2,6 +2,14 @@
 
 A modern web dashboard for managing multiple VyOS router instances via their REST API.
 
+## One-Click Installation
+
+Run the following command on your server to install and set up everything automatically:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/tahasaifeee/vyosdashy/main/setup.sh | bash
+```
+
 ## Features
 - **Phase 1: Core Foundation** (Completed)
   - JWT Authentication & RBAC
@@ -9,18 +17,39 @@ A modern web dashboard for managing multiple VyOS router instances via their RES
   - VyOS API Connector (version aware)
   - Connectivity Testing
 
+## VyOS Router Configuration
+
+Before adding a router to the dashboard, you must enable the HTTPS API on your VyOS instance. Run the following commands in VyOS configuration mode:
+
+```bash
+# 1. Enable HTTPS API
+set service https api keys id MY_API_KEY key YOUR_SECRET_API_KEY
+
+# 2. (Optional) Set the listening address (e.g., your management IP)
+set service https virtual-host vyos.example.com listen-address 0.0.0.0
+
+# 3. (Optional) Set a custom port (default is 443)
+set service https port 443
+
+# 4. Apply and Save
+commit
+save
+```
+
+*Note: The dashboard communicates with the router over HTTPS using the API key you defined above.*
+
 ## Tech Stack
 - **Frontend**: Next.js 14, Tailwind CSS, Lucide Icons, Axios
 - **Backend**: FastAPI (Python), SQLAlchemy (PostgreSQL), Pydantic
 - **Infrastructure**: Docker Compose, Redis (for future tasks)
 
-## Quick Start (Production/Server)
+## Quick Start (Manual)
 
-We've provided a master setup script that handles environment configuration and Docker deployment.
+If you have already cloned the repository, you can run the setup script locally:
 
 1.  **Clone the repository:**
     ```bash
-    git clone <repository-url>
+    git clone https://github.com/tahasaifeee/vyosdashy.git
     cd vyosdashy
     ```
 
@@ -40,22 +69,8 @@ We've provided a master setup script that handles environment configuration and 
     *   Backend API: `http://your-server-ip:8000`
     *   API Docs: `http://your-server-ip:8000/docs`
 
-## Manual Development Setup
-
-If you prefer to run services manually for development:
-
-### 1. Launch with Docker
-```bash
-docker-compose up --build
-```
-This will start:
-- PostgreSQL (Port 5432)
-- Redis (Port 6379)
-- Backend (Port 8000)
-- Frontend (Port 3000)
-
-### 2. Setup First User
-Since there is no "Sign Up" page in Phase 1 (for security), you can create the first user via the API docs at `http://localhost:8000/docs#/users/create_user_api_v1_users__post`.
+## Setup First User
+Since there is no "Sign Up" page (for security), you can create the first user via the API docs at `http://localhost:8000/docs#/users/create_user_api_v1_users__post`.
 
 Or via `curl`:
 ```bash
@@ -66,9 +81,6 @@ curl -X POST "http://localhost:8000/api/v1/users/" -H "Content-Type: application
   "role": "admin"
 }'
 ```
-
-### 3. Access UI
-Go to `http://localhost:3000/login` and sign in with the user you created.
 
 ## Project Structure
 - `/backend`: FastAPI application

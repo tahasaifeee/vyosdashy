@@ -8,10 +8,18 @@ echo "----------------------------------------"
 echo "   VyOS UI Manager - Setup Script"
 echo "----------------------------------------"
 
+# Check if we are inside a git repo or if we need to clone
+if [ ! -d ".git" ]; then
+    echo "It looks like you are running this script outside of the repository."
+    echo "Cloning the repository to 'vyosdashy'..."
+    git clone https://github.com/tahasaifeee/vyosdashy.git vyosdashy
+    cd vyosdashy
+fi
+
 # Function to generate a random secret key
 generate_secret_key() {
-    python3 -c 'import secrets; print(secrets.token_urlsafe(32))' 2>/dev/null || 
-    openssl rand -base64 32 2>/dev/null || 
+    python3 -c 'import secrets; print(secrets.token_urlsafe(32))' 2>/dev/null || \
+    openssl rand -base64 32 2>/dev/null || \
     echo "temporary-secret-key-$(date +%s)"
 }
 
