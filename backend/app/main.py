@@ -26,7 +26,6 @@ app = FastAPI(
 )
 
 # Set all CORS enabled origins
-# We use a more robust way to handle the origins list
 origins = []
 if settings.BACKEND_CORS_ORIGINS:
     if isinstance(settings.BACKEND_CORS_ORIGINS, str):
@@ -34,17 +33,28 @@ if settings.BACKEND_CORS_ORIGINS:
     else:
         origins = [str(origin) for origin in settings.BACKEND_CORS_ORIGINS]
 
-# If no origins specified, allow all in development/on-prem environments
+# Default origins for local development if nothing is specified
 if not origins:
     origins = ["*"]
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS Middleware with robust settings
+# If "*" is in origins, we use allow_origin_regex=".*" to allow credentials with wildcards
+if "*" in origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=".*",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 
