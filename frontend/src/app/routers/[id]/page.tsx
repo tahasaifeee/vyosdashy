@@ -24,21 +24,92 @@ export default function RouterDashboard() {
         api.get(`/routers/${id}`),
         api.get(`/metrics/${id}/latest`),
         api.get(`/metrics/${id}/history?limit=30`)
-
       ]);
       setRouterInfo(infoRes.data);
       setLatest(latestRes.data);
-      setMetrics(historyRes.data.map((m: any) => ({
-        time: new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        // Example: calculate total throughput if available in interfaces JSON
-        throughput: 0 
-      })));
+      
+      if (Array.isArray(historyRes.data)) {
+        setMetrics(historyRes.data.map((m: any) => {
+          // Simple throughput calculation: sum of rx_bytes + tx_bytes across all interfaces
+          let totalBytes = 0;
+          if (m.interfaces) {
+            Object.values(m.interfaces).forEach((types: any) => {
+              Object.values(types).forEach((iface: any) => {
+                if (iface.stats) {
+                  totalBytes += (parseInt(iface.stats.rx_bytes) || 0) + (parseInt(iface.stats.tx_bytes) || 0);
+                }
+              });
+            });
+          }
+          
+          return {
+            time: new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+            throughput: Math.round(totalBytes / 1024 / 1024 * 8 * 100) / 100 // Convert to Mbps
+          };
+        }));
+      }
     } catch (err) {
       console.error('Failed to fetch dashboard data', err);
     } finally {
       setLoading(false);
     }
   };
+
+  const renderInterfaces = () => {
+    if (!latest?.interfaces) return null;
+    
+    const rows: any[] = [];
+    Object.entries(latest.interfaces).forEach(([type, ifaces]: [string, any]) => {
+      Object.entries(ifaces).forEach(([name, data]: [string, any]) => {
+        rows.push(
+          <tr key={`${type}-${name}`} className="text-sm">
+            <td className="py-4 font-medium">{name} <span className="text-gray-400 font-normal">({type})</span></td>
+            <td className="py-4">
+              <span className={`px-2 py-0.5 rounded text-xs ${
+                data.state === 'up' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+              }`}>
+                {(data.state || 'DOWN').toUpperCase()}
+              </span>
+            </td>
+            <td className="py-4">{Array.isArray(data.address) ? data.address[0] : (data.address || 'N/A')}</td>
+            <td className="py-4">{formatBytes(data.stats?.rx_bytes)}</td>
+            <td className="py-4">{formatBytes(data.stats?.tx_bytes)}</td>
+          </tr>
+        );
+      });
+    });
+    return rows;
+  };
+
+  const renderBGP = () => {
+    if (!latest?.bgp_neighbors) return (
+      <p className="text-sm text-gray-500 italic">No BGP neighbors configured or active.</p>
+    );
+
+    // VyOS BGP JSON structure varies, but usually has a 'neighbors' key or is the object itself
+    const neighbors = latest.bgp_neighbors.neighbors || latest.bgp_neighbors;
+    
+    return Object.entries(neighbors).map(([peer, data]: [string, any]) => (
+      <div key={peer} className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700">
+        <div className="flex justify-between items-center mb-1">
+          <span className="font-medium text-sm">{peer}</span>
+          <span className={`text-[10px] uppercase font-bold ${
+            data.state === 'Established' ? 'text-emerald-600' : 'text-amber-600'
+          }`}>{data.state}</span>
+        </div>
+        <div className="text-xs text-gray-500">AS {data.remote_as} • Up for {data.uptime || 'N/A'}</div>
+      </div>
+    ));
+  };
+
+  function formatBytes(bytes: any) {
+    const b = parseInt(bytes);
+    if (isNaN(b) || b === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.floor(Math.log(b) / Math.log(k));
+    return parseFloat((b / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  }
 
   useEffect(() => {
     fetchData();
@@ -120,21 +191,7 @@ export default function RouterDashboard() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-50 dark:divide-gray-700">
-                    {/* Map interfaces from 'latest' metrics here */}
-                    <tr className="text-sm">
-                      <td className="py-4 font-medium">eth0 (WAN)</td>
-                      <td className="py-4"><span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">UP</span></td>
-                      <td className="py-4">1.2.3.4/24</td>
-                      <td className="py-4">1.2 GB</td>
-                      <td className="py-4">400 MB</td>
-                    </tr>
-                    <tr className="text-sm">
-                      <td className="py-4 font-medium">eth1 (LAN)</td>
-                      <td className="py-4"><span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">UP</span></td>
-                      <td className="py-4">192.168.1.1/24</td>
-                      <td className="py-4">500 MB</td>
-                      <td className="py-4">1.1 GB</td>
-                    </tr>
+                    {renderInterfaces()}
                   </tbody>
                 </table>
               </div>
@@ -148,13 +205,7 @@ export default function RouterDashboard() {
                 <ShieldCheck className="w-5 h-5 text-blue-600" /> BGP Neighbors
               </h3>
               <div className="space-y-4">
-                <div className="p-3 bg-gray-50 dark:bg-gray-900/50 rounded-lg border border-gray-100 dark:border-gray-700">
-                  <div className="flex justify-between items-center mb-1">
-                    <span className="font-medium text-sm">10.0.0.1</span>
-                    <span className="text-[10px] uppercase font-bold text-emerald-600">Established</span>
-                  </div>
-                  <div className="text-xs text-gray-500">AS 65001 • Up for 12h 4m</div>
-                </div>
+                {renderBGP()}
               </div>
             </div>
 
