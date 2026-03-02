@@ -210,12 +210,19 @@ class VyOSClient:
         return lines[-50:]
 
     async def get_active_connections(self) -> Optional[str]:
-        """Fetch active system connections (the conntrack table)."""
-        # Try to get the actual flow table first
+        """Fetch active system connections with multiple command fallbacks."""
+        # 1. Try the IPv4 conntrack table (Firewall/NAT flows)
         res = await self.show_text(["conntrack", "table", "ipv4"])
-        if res.startswith("Error:"):
-            # Fallback to statistics if table is too large or command fails
+        
+        if not res or "Entries not found" in res or res.startswith("Error:"):
+            # 2. Fallback to System Connections (Sockets like SSH, BGP, etc.)
+            res_sys = await self.show_text(["system", "connections"])
+            if res_sys and not res_sys.startswith("Error:"):
+                return res_sys
+            
+            # 3. Last fallback to conntrack statistics
             return await self.show_text(["conntrack", "statistics"])
+            
         return res
 
     async def ping(self, host: str, count: int = 4) -> str:
