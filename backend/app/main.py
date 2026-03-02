@@ -1,7 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import asyncio
 from contextlib import asynccontextmanager
+from typing import Optional, Dict, Any
+from pydantic import BaseModel, ValidationError, field_validator
 
 from app.core.config import settings
 from app.api.api import api_router
@@ -13,14 +16,12 @@ from app.core.database import Base, engine
 async def lifespan(app: FastAPI):
     # Ensure all tables are created
     async with engine.begin() as conn:
-        # We need to import models here to ensure they are registered with Base.metadata
         from app.models.user import User
         from app.models.router import Router
         from app.models.metrics import RouterMetrics
         from app.models.alert import Alert
         await conn.run_sync(Base.metadata.create_all)
         
-        # Manual migration for existing tables
         try:
             await conn.execute(text("ALTER TABLE router_metrics ADD COLUMN IF NOT EXISTS load_average JSON"))
             await conn.execute(text("ALTER TABLE router_metrics ADD COLUMN IF NOT EXISTS active_sessions INTEGER DEFAULT 0"))
@@ -29,10 +30,8 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             print(f"Migration notice: {e}")
         
-    # Start background tasks
     task = asyncio.create_task(run_metrics_collector())
     yield
-    # Clean up
     task.cancel()
     try:
         await task
@@ -45,9 +44,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# CORS — use configured origins if provided, fall back to ["*"] for local dev.
-# Bearer tokens in headers (not cookies) work with wildcard origins and don't
-# require allow_credentials=True.
 cors_origins = [str(o) for o in settings.BACKEND_CORS_ORIGINS] if settings.BACKEND_CORS_ORIGINS else ["*"]
 app.add_middleware(
     CORSMiddleware,
@@ -63,23 +59,62 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 def health_check():
     return {"status": "ok"}
 
+# ── VyOS-Compliant /info Implementation ──────────────────────────────────────
+
+class InfoQueryParams(BaseModel):
+    version: str = "true"
+    hostname: str = "true"
+
+    class Config:
+        extra = "forbid"
+
+    @field_validator("version", "hostname", mode="before")
+    @classmethod
+    def validate_vyos_bool(cls, v: Any) -> str:
+        s = str(v).lower()
+        if s in ("1", "true", "yes", "on"):
+            return "true"
+        if s in ("0", "false", "no", "off"):
+            return "false"
+        # Exact error message pattern from VyOS docs
+        raise ValueError(f"Input should be a valid boolean, unable to interpret input")
+
 @app.get("/info")
-def get_service_info(version: bool = True, hostname: bool = True):
+async def get_service_info(request: Request):
     """
     Public endpoint providing service information.
-    Matches VyOS API pattern.
+    Strictly follows VyOS API specification.
     """
-    data = {"banner": "Welcome to VyOS UI Manager"}
-    if version:
-        data["version"] = "0.5.0-beta"
-    if hostname:
-        data["hostname"] = "vyos-dashy-manager"
+    try:
+        # Capture raw query params for strict validation
+        raw_params = dict(request.query_params)
+        params = InfoQueryParams(**raw_params)
         
-    return {
-        "success": True,
-        "data": data,
-        "error": None
-    }
+        data = {
+            "version": "0.5.0-beta" if params.version == "true" else "",
+            "hostname": "vyos-dashy-manager" if params.hostname == "true" else "",
+            "banner": "Welcome to VyOS UI Manager"
+        }
+        
+        return {
+            "success": True,
+            "data": data,
+            "error": None
+        }
+    except ValidationError as e:
+        # Match the VyOS error format precisely
+        # Extract the specific Pydantic error and format as a stringified dict-like structure
+        err = e.errors()[0]
+        error_msg = f"{{'type': '{err['type']}', 'loc': {err['loc']}, 'msg': '{err['msg']}', 'input': '{err['input']}'}}"
+        
+        return JSONResponse(
+            status_code=400,
+            content={
+                "success": False,
+                "error": error_msg,
+                "data": None
+            }
+        )
 
 @app.get("/")
 def read_root():

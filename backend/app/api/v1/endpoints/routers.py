@@ -173,25 +173,40 @@ async def get_router_config(
     }
 
 
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, status, Request
+from fastapi.responses import JSONResponse
+from pydantic import ValidationError
+from app.main import InfoQueryParams
+
 @router.get("/{id}/info")
 async def get_router_info_proxy(
-    *,
-    db: AsyncSession = Depends(deps.get_db),
+    request: Request,
     id: int,
-    version: bool = True,
-    hostname: bool = True,
+    db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
     """
-    Proxy the /info endpoint of a specific VyOS router.
+    Proxy the /info endpoint of a specific VyOS router with strict validation.
     """
-    result = await db.execute(select(Router).where(Router.id == id))
-    router_obj = result.scalars().first()
-    if not router_obj:
-        raise HTTPException(status_code=404, detail="Router not found")
+    try:
+        raw_params = dict(request.query_params)
+        params = InfoQueryParams(**raw_params)
+        
+        result = await db.execute(select(Router).where(Router.id == id))
+        router_obj = result.scalars().first()
+        if not router_obj:
+            raise HTTPException(status_code=404, detail="Router not found")
 
-    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
-    return await client.get_info(version=version, hostname=hostname)
+        client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
+        # Convert internal string params back to bools for the client
+        return await client.get_info(
+            version=(params.version == "true"), 
+            hostname=(params.hostname == "true")
+        )
+    except ValidationError as e:
+        err = e.errors()[0]
+        error_msg = f"{{'type': '{err['type']}', 'loc': {err['loc']}, 'msg': '{err['msg']}', 'input': '{err['input']}'}}"
+        return JSONResponse(status_code=400, content={"success": False, "error": error_msg, "data": None})
 
 @router.get("/{id}/routes")
 
