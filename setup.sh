@@ -59,7 +59,7 @@ generate_secret_key() {
 
 # Check if .env already exists
 if [ -f .env ]; then
-    read -p ".env file already exists. Overwrite? (y/N): " overwrite
+    read -p ".env file already exists. Overwrite? (y/N): " overwrite < /dev/tty
     if [[ ! "$overwrite" =~ ^[Yy]$ ]]; then
         echo "Setup aborted."
         exit 0
@@ -70,32 +70,32 @@ fi
 echo ""
 echo "Please provide the following information (press Enter for defaults):"
 
-read -p "Project Name [VyOS UI Manager]: " PROJECT_NAME
+read -p "Project Name [VyOS UI Manager]: " PROJECT_NAME < /dev/tty
 PROJECT_NAME=${PROJECT_NAME:-"VyOS UI Manager"}
 
-read -p "Postgres User [postgres]: " POSTGRES_USER
+read -p "Postgres User [postgres]: " POSTGRES_USER < /dev/tty
 POSTGRES_USER=${POSTGRES_USER:-"postgres"}
 
-read -p "Postgres Password [secure_password]: " POSTGRES_PASSWORD
+read -p "Postgres Password [secure_password]: " POSTGRES_PASSWORD < /dev/tty
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-"secure_password"}
 
-read -p "Postgres Database [vyos_manager]: " POSTGRES_DB
+read -p "Postgres Database [vyos_manager]: " POSTGRES_DB < /dev/tty
 POSTGRES_DB=${POSTGRES_DB:-"vyos_manager"}
 
-read -p "Postgres Server [db]: " POSTGRES_SERVER
+read -p "Postgres Server [db]: " POSTGRES_SERVER < /dev/tty
 POSTGRES_SERVER=${POSTGRES_SERVER:-"db"}
 
 SECRET_KEY=$(generate_secret_key)
-read -p "Secret Key (press Enter to use generated): " USER_SECRET_KEY
+read -p "Secret Key (press Enter to use generated): " USER_SECRET_KEY < /dev/tty
 SECRET_KEY=${USER_SECRET_KEY:-$SECRET_KEY}
 
-read -p "Backend CORS Origins [http://localhost:3000,http://localhost:8000]: " BACKEND_CORS_ORIGINS
+read -p "Backend CORS Origins [http://localhost:3000,http://localhost:8000]: " BACKEND_CORS_ORIGINS < /dev/tty
 BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS:-'["http://localhost:3000", "http://localhost:8000"]'}
 
-read -p "Next Public API URL [http://localhost:8000]: " NEXT_PUBLIC_API_URL
+read -p "Next Public API URL [http://localhost:8000]: " NEXT_PUBLIC_API_URL < /dev/tty
 NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-"http://localhost:8000"}
 
-read -p "Redis URL [redis://redis:6379/0]: " REDIS_URL
+read -p "Redis URL [redis://redis:6379/0]: " REDIS_URL < /dev/tty
 REDIS_URL=${REDIS_URL:-"redis://redis:6379/0"}
 
 # Construct DATABASE_URL
@@ -130,12 +130,12 @@ echo ".env files have been created successfully."
 echo "----------------------------------------"
 
 # Ask to run docker-compose
-read -p "Do you want to start the application with docker? (y/N): " run_docker
+read -p "Do you want to start the application with docker? (y/N): " run_docker < /dev/tty
 if [[ "$run_docker" =~ ^[Yy]$ ]]; then
     echo "Checking for Docker..."
     if ! command -v docker >/dev/null 2>&1; then
         echo "Docker is not installed."
-        read -p "Would you like to install Docker now? (y/N): " install_docker
+        read -p "Would you like to install Docker now? (y/N): " install_docker < /dev/tty
         if [[ "$install_docker" =~ ^[Yy]$ ]]; then
             echo "Installing Docker..."
             curl -fsSL https://get.docker.com | sh
@@ -157,7 +157,7 @@ if [[ "$run_docker" =~ ^[Yy]$ ]]; then
         DOCKER_COMPOSE_CMD="docker-compose"
     else
         echo "Docker Compose is not found."
-        read -p "Would you like to install Docker Compose plugin? (y/N): " install_compose
+        read -p "Would you like to install Docker Compose plugin? (y/N): " install_compose < /dev/tty
         if [[ "$install_compose" =~ ^[Yy]$ ]]; then
             # Assuming Debian/Ubuntu based on common server environments, 
             # or try to use the generic method if apt is missing
