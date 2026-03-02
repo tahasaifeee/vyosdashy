@@ -61,9 +61,13 @@ class VyOSClient:
     async def test_connection(self) -> Dict[str, Any]:
         """Test if API is reachable and key is valid. Returns dict with success and optional error."""
         res = await self.get_config(["system", "host-name"])
+        # VyOS API returns 'success: true' in the JSON body if it worked
         if res.get("success") is True:
             return {"success": True}
-        return {"success": False, "error": res.get("error", "Unknown API error")}
+        
+        # If the API returned a failure message (like invalid key)
+        error_msg = res.get("error") or res.get("data") or "Unknown API error"
+        return {"success": False, "error": str(error_msg)}
 
     async def get_interface_stats(self) -> Dict[str, Any]:
         """Fetch all interface statistics"""

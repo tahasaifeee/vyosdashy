@@ -10,6 +10,36 @@ from app.core.database import AsyncSessionLocal
 
 class MetricsService:
     @staticmethod
+    async def collect_metrics_by_id(router_id: int):
+        async with AsyncSessionLocal() as db:
+            result = await db.execute(select(Router).where(Router.id == router_id))
+            router = result.scalars().first()
+            if not router:
+                return
+            
+            client = VyOSClient(hostname=router.hostname, api_key=router.api_key)
+            test_res = await client.test_connection()
+            is_online = test_res.get("success") is True
+            router.status = RouterStatus.ONLINE if is_online else RouterStatus.OFFLINE
+            router.last_seen = datetime.now()
+            
+            if is_online:
+                try:
+                    interfaces_res = await client.get_interface_stats()
+                    bgp_res = await client.get_bgp_summary()
+                    metrics = RouterMetrics(
+                        router_id=router.id,
+                        interfaces=interfaces_res.get("data"),
+                        bgp_neighbors=bgp_res.get("data"),
+                    )
+                    db.add(metrics)
+                except Exception as e:
+                    print(f"Error fetching metrics for {router.name}: {e}")
+            
+            db.add(router)
+            await db.commit()
+
+    @staticmethod
     async def collect_metrics_for_router(router: Router):
         async with AsyncSessionLocal() as db:
             # Re-merge the router into the current session to avoid 'detached' error

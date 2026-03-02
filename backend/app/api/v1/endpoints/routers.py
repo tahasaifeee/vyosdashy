@@ -43,7 +43,7 @@ async def create_router(
     # Trigger immediate background collection so user doesn't see "Unknown" for 30s
     from app.services.metrics_service import MetricsService
     import asyncio
-    asyncio.create_task(MetricsService.collect_metrics_for_router(router))
+    asyncio.create_task(MetricsService.collect_metrics_by_id(router.id))
     
     return router
 
