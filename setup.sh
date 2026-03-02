@@ -64,7 +64,7 @@ generate_secret_key() {
 
 # Get public IP
 get_public_ip() {
-    curl -s https://ipinfo.io/ip || curl -s https://api.ipify.org || echo "localhost"
+    curl -s --max-time 2 https://ipinfo.io/ip || curl -s --max-time 2 https://api.ipify.org || echo "localhost"
 }
 
 # Ensure basic dependencies are present
@@ -112,13 +112,13 @@ reconfigure() {
 
     GENERATED_KEY=$(generate_secret_key)
     prompt_user "Secret Key (press Enter to use generated): " "$GENERATED_KEY" SECRET_KEY
-    prompt_user "Backend CORS Origins [http://localhost:3000,http://localhost:8000]: " "http://localhost:3000,http://localhost:8000" BACKEND_CORS_ORIGINS
+    prompt_user "Backend CORS Origins (Comma separated IPs/Domains) [http://localhost:3000,http://localhost:8000,http://${PUBLIC_IP}:3000]: " "http://localhost:3000,http://localhost:8000,http://${PUBLIC_IP}:3000" BACKEND_CORS_ORIGINS
     prompt_user "Next Public API URL [${DEFAULT_API_URL}]: " "$DEFAULT_API_URL" NEXT_PUBLIC_API_URL
     prompt_user "Redis URL [redis://redis:6379/0]: " "redis://redis:6379/0" REDIS_URL
 
     DATABASE_URL="postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_SERVER}:5432/${POSTGRES_DB}"
 
-    # Generate .env file
+    # Generate .env file without single quotes around values
     cat << EOF > .env
 # Project Settings
 PROJECT_NAME=${PROJECT_NAME}
