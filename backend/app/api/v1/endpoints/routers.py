@@ -157,7 +157,28 @@ async def get_router_config(
         "info": info_res.get("data") if info_res.get("success") else {},
     }
 
+@router.get("/{id}/info")
+async def get_router_info_proxy(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    id: int,
+    version: bool = True,
+    hostname: bool = True,
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Proxy the /info endpoint of a specific VyOS router.
+    """
+    result = await db.execute(select(Router).where(Router.id == id))
+    router_obj = result.scalars().first()
+    if not router_obj:
+        raise HTTPException(status_code=404, detail="Router not found")
+
+    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
+    return await client.get_info(version=version, hostname=hostname)
+
 @router.get("/{id}/routes")
+
 async def get_router_routes(
     *,
     db: AsyncSession = Depends(deps.get_db),

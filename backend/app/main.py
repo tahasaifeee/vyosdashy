@@ -62,6 +62,24 @@ app.include_router(api_router, prefix=settings.API_V1_STR)
 def health_check():
     return {"status": "ok"}
 
+@app.get("/info")
+def get_service_info(version: bool = True, hostname: bool = True):
+    """
+    Public endpoint providing service information.
+    Matches VyOS API pattern.
+    """
+    data = {"banner": "Welcome to VyOS UI Manager"}
+    if version:
+        data["version"] = "0.5.0-beta"
+    if hostname:
+        data["hostname"] = "vyos-dashy-manager"
+        
+    return {
+        "success": True,
+        "data": data,
+        "error": None
+    }
+
 @app.get("/")
 def read_root():
     return {"message": "Welcome to VyOS UI Manager API"}
