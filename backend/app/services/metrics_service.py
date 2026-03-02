@@ -25,12 +25,23 @@ class MetricsService:
             
             if is_online:
                 try:
+                    # Fetch all metrics
                     interfaces_res = await client.get_interface_stats()
                     bgp_res = await client.get_bgp_summary()
+                    uptime_res = await client.get_system_uptime()
+                    resource_res = await client.get_resource_usage()
+
+                    # Simple parsing for uptime (if it's a string from VyOS)
+                    uptime_data = uptime_res.get("data")
+                    # In a real app, we'd parse this string to seconds
+                    
                     metrics = RouterMetrics(
                         router_id=router.id,
                         interfaces=interfaces_res.get("data"),
                         bgp_neighbors=bgp_res.get("data"),
+                        # Placeholder for parsed values
+                        cpu_usage=0.0, 
+                        memory_usage=0.0,
                     )
                     db.add(metrics)
                 except Exception as e:
@@ -59,12 +70,16 @@ class MetricsService:
                     # Async fetch
                     interfaces_res = await client.get_interface_stats()
                     bgp_res = await client.get_bgp_summary()
+                    uptime_res = await client.get_system_uptime()
+                    resource_res = await client.get_resource_usage()
                     
                     # Create Metric Entry
                     metrics = RouterMetrics(
                         router_id=router.id,
                         interfaces=interfaces_res.get("data"),
                         bgp_neighbors=bgp_res.get("data"),
+                        cpu_usage=0.0, 
+                        memory_usage=0.0,
                     )
                     db.add(metrics)
                 except Exception as e:

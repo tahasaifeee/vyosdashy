@@ -83,4 +83,4 @@ class VyOSClient:
 
     async def get_resource_usage(self) -> Dict[str, Any]:
         """Fetch CPU/Memory via system resources"""
-        return await self.show_op(["system", "image"])
+        return await self.show_op(["system", "resources"])

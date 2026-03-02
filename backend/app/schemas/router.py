@@ -27,8 +27,21 @@ class RouterInDBBase(RouterBase):
     last_seen: Optional[datetime] = None
     created_at: Optional[datetime] = None
 
-    class Config:
-        orm_mode = True
+    model_config = {
+        "from_attributes": True
+    }
 
-class Router(RouterInDBBase):
-    pass
+class Router(BaseModel):
+    id: int
+    name: str
+    hostname: str
+    site: Optional[str] = None
+    status: RouterStatus
+    is_enabled: bool
+    version: Optional[str] = None
+    last_seen: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+    model_config = {
+        "from_attributes": True
+    }

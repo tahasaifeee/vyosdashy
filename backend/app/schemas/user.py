@@ -18,8 +18,9 @@ class UserInDBBase(UserBase):
     id: int
     is_superuser: bool
 
-    class Config:
-        orm_mode = True
+    model_config = {
+        "from_attributes": True
+    }
 
 class User(UserInDBBase):
     pass
