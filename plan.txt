@@ -1,0 +1,114 @@
+VyOS Manager — Build Plan
+Stack Recommendation
+LayerTechFrontendNext.js + Tailwind + shadcn/uiBackendFastAPI (Python)DatabasePostgreSQLCache/QueueRedisAuthJWT + RBACDeploymentDocker ComposeVyOS IntegrationVyOS REST API (HTTPS)
+Python backend makes sense given VyOS is Python-native and most VyOS API libraries are Python.
+
+Phase 1 — Core Foundation (2–3 weeks)
+Backend:
+
+Project scaffold (FastAPI + PostgreSQL + Alembic migrations)
+Auth system: login, JWT tokens, session management
+RBAC: Admin, Operator, Read-only roles
+Router registry: CRUD for VyOS instances (name, IP, API key, site, version)
+VyOS API connector class — version-aware (1.4 vs 1.5), handles auth + retries
+
+Frontend:
+
+Auth pages (login/logout)
+Router list + add/edit/delete router modal
+Basic connectivity test (ping router API, show online/offline badge)
+
+
+Phase 2 — Monitoring Dashboard (2–3 weeks)
+
+Pull live data from VyOS REST API: interface stats, BGP neighbors, routing table summary, system uptime, load
+Per-router dashboard: interfaces table (UP/DOWN, traffic), BGP peer status, system health
+Global overview: all routers at a glance, alert badges for any down interfaces or BGP drops
+Background polling via Redis + Celery (or APScheduler) — configurable interval (30s default)
+Store historical metrics in PostgreSQL (keep 30 days) → chart interface traffic over time with recharts
+
+
+Phase 3 — Configuration Management (3–4 weeks)
+This is the hardest part. Approach:
+
+Read config — fetch running config via REST API, display as structured tree + raw text view
+Firewall rules — UI to view/add/edit/delete firewall rules (name, action, source, dest, port)
+NAT rules — SNAT/DNAT management UI
+Static routes — add/delete via UI
+Interface config — description, IP, MTU edits
+BGP — view neighbors, advertised/received prefixes (read-only first)
+All changes go through a "staged commit" flow: preview diff → confirm → push → rollback on failure
+
+
+Phase 4 — Multi-Site / Multi-Tenant (1–2 weeks)
+Since you manage 100+ clients:
+
+Sites grouping (e.g. UAE-DC1, KSA-DC1)
+Tenant/client assignment — each client sees only their routers
+Per-site role mapping (client A's admin can't touch client B's routers)
+Audit log — every config change recorded with who/when/what
+
+
+Phase 5 — Advanced Features (ongoing)
+
+Config backup — scheduled daily config snapshots to local storage or S3
+Config diff viewer — compare current vs snapshot
+Bulk operations — push same firewall rule to multiple routers
+Alerting — webhook/email when interface goes down or BGP drops
+DDoS integration — hooks into your existing DDoS protection systems
+CLI passthrough — send raw operational commands (show bgp summary, etc.) from UI
+
+
+Database Schema (core tables)
+users → id, email, password_hash, role
+sites → id, name, region (UAE/KSA)
+routers → id, site_id, name, mgmt_ip, api_key, vyos_version, enabled
+user_site_roles → user_id, site_id, role
+router_metrics → router_id, timestamp, interface, rx_bytes, tx_bytes
+config_snapshots → router_id, timestamp, config_json
+audit_log → user_id, router_id, timestamp, action, diff
+
+VyOS API Integration Notes
+python# VyOS REST API pattern
+POST https://<router-ip>/retrieve
+  {"op": "showConfig", "path": []}
+
+POST https://<router-ip>/configure
+  {"op": "set", "path": ["firewall", "name", "WAN_IN", ...]}
+
+POST https://<router-ip>/commit
+POST https://<router-ip>/save
+```
+
+- Always `commit` + `save` after changes
+- Wrap in try/except with auto-rollback if commit fails
+- Use `show` operations for read-only data pulls
+
+---
+
+### Folder Structure
+```
+vyos-manager/
+├── backend/
+│   ├── app/
+│   │   ├── api/          # route handlers
+│   │   ├── models/       # SQLAlchemy models
+│   │   ├── services/     # VyOS API connector, metrics poller
+│   │   ├── tasks/        # background jobs
+│   │   └── core/         # auth, config, RBAC
+│   └── Dockerfile
+├── frontend/
+│   ├── app/              # Next.js app router
+│   ├── components/
+│   └── Dockerfile
+├── docker-compose.yml
+└── README.md
+
+Suggested Build Order
+
+Auth + router registry (get routers stored and connected)
+Monitoring dashboard (biggest immediate value)
+Config read + display (before you write anything)
+Firewall/NAT write operations (most used config tasks)
+Multi-tenant + audit log
+Backup/diff/alerting

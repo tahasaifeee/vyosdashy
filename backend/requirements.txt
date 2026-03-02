@@ -1,0 +1,12 @@
+fastapi[all]
+sqlalchemy[asyncio]
+alembic
+psycopg2-binary
+asyncpg
+python-jose[cryptography]
+passlib[bcrypt]
+python-multipart
+pydantic-settings
+requests
+redis
+celery
