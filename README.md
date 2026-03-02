@@ -19,6 +19,10 @@ curl -sSL https://raw.githubusercontent.com/tahasaifeee/vyosdashy/main/setup.sh 
 
 ## VyOS Router Configuration
 
+### Compatible Versions
+This dashboard is designed to work with **VyOS 1.4 (Sagitta)** and **VyOS 1.5 (Circinus)**, as these versions have the modern REST API required for remote management.
+
+### Configuration Steps
 Before adding a router to the dashboard, you must enable the HTTPS API on your VyOS instance. Run the following commands in VyOS configuration mode:
 
 ```bash
