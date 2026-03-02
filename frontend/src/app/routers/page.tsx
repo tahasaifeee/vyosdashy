@@ -18,6 +18,8 @@ interface Router {
 export default function RoutersPage() {
   const [routers, setRouters] = useState<Router[]>([]);
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [newRouter, setNewRouter] = useState({ name: '', hostname: '', site: '', api_key: '' });
   const router = useRouter();
@@ -41,13 +43,18 @@ export default function RoutersPage() {
 
   const handleAddRouter = async (e: React.FormEvent) => {
     e.preventDefault();
+    setSubmitting(true);
+    setError(null);
     try {
       await api.post('/routers/', newRouter);
       setShowAddModal(false);
       setNewRouter({ name: '', hostname: '', site: '', api_key: '' });
       fetchRouters();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to add router', err);
+      setError(err.response?.data?.detail || 'Failed to connect to router. Check hostname and API key.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -135,6 +142,13 @@ export default function RoutersPage() {
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
             <div className="bg-white dark:bg-gray-800 rounded-2xl max-w-md w-full p-8 shadow-2xl">
               <h2 className="text-xl font-bold mb-6 text-gray-900 dark:text-white">Add New Router</h2>
+              
+              {error && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-600 text-sm rounded-lg">
+                  {error}
+                </div>
+              )}
+
               <form onSubmit={handleAddRouter} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Router Name</label>
@@ -186,9 +200,17 @@ export default function RoutersPage() {
                   </button>
                   <button
                     type="submit"
-                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-500 transition"
+                    disabled={submitting}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-500 transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    Save Router
+                    {submitting ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Saving...
+                      </>
+                    ) : (
+                      'Save Router'
+                    )}
                   </button>
                 </div>
               </form>

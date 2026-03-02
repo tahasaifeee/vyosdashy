@@ -33,12 +33,18 @@ async def create_router(
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
     """
-    Create new router.
+    Create new router and trigger immediate connectivity test.
     """
     router = Router(**router_in.dict())
     db.add(router)
     await db.commit()
     await db.refresh(router)
+    
+    # Trigger immediate background collection so user doesn't see "Unknown" for 30s
+    from app.services.metrics_service import MetricsService
+    import asyncio
+    asyncio.create_task(MetricsService.collect_metrics_for_router(router))
+    
     return router
 
 @router.get("/{id}", response_model=RouterSchema)
@@ -99,7 +105,7 @@ async def test_router_connection(
     
     from app.services.vyos import VyOSClient
     client = VyOSClient(hostname=router.hostname, api_key=router.api_key)
-    is_online = client.test_connection()
+    is_online = await client.test_connection()
     
     # Update status in DB
     from app.models.router import RouterStatus

@@ -8,6 +8,6 @@ passlib[bcrypt]
 bcrypt==4.0.1
 python-multipart
 pydantic-settings
-requests
+httpx
 redis
 celery

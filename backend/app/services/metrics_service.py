@@ -18,16 +18,16 @@ class MetricsService:
             client = VyOSClient(hostname=router.hostname, api_key=router.api_key)
             
             # 1. Check Connectivity
-            is_online = client.test_connection()
+            is_online = await client.test_connection()
             router.status = RouterStatus.ONLINE if is_online else RouterStatus.OFFLINE
             router.last_seen = datetime.now()
             
             if is_online:
                 # 2. Fetch Detailed Metrics
                 try:
-                    # Parallel fetch if possible, but requests is synchronous
-                    interfaces_res = client.get_interface_stats()
-                    bgp_res = client.get_bgp_summary()
+                    # Async fetch
+                    interfaces_res = await client.get_interface_stats()
+                    bgp_res = await client.get_bgp_summary()
                     
                     # Create Metric Entry
                     metrics = RouterMetrics(

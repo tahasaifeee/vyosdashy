@@ -89,8 +89,14 @@ create_admin_user() {
         echo "Creating admin user in database..."
         # Wait for the DB to be ready
         sleep 5
-        docker exec -it vyosdashy-backend-1 python app/create_first_user.py "$ADMIN_EMAIL" "$ADMIN_PASSWORD" "$ADMIN_NAME" "admin" || \
-        echo "Failed to create user. Please check container logs: docker logs vyosdashy-backend-1"
+        # Try to find the backend container name (it might be vyosdashy-backend-1 or vyos_dashy-backend-1)
+        BACKEND_CONTAINER=$(docker ps --format "{{.Names}}" | grep "backend" | head -n 1)
+        if [ -n "$BACKEND_CONTAINER" ]; then
+            docker exec -it "$BACKEND_CONTAINER" python app/create_first_user.py "$ADMIN_EMAIL" "$ADMIN_PASSWORD" "$ADMIN_NAME" "admin" || \
+            echo "Failed to create user. Please check container logs: docker logs $BACKEND_CONTAINER"
+        else
+            echo "Error: Backend container not found. Is the app running?"
+        fi
     fi
 }
 
