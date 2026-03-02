@@ -290,7 +290,7 @@ install_app() {
         fi
 
         if [ -n "$DOCKER_COMPOSE_CMD" ]; then
-            $DOCKER_COMPOSE_CMD up -d --build
+            $DOCKER_COMPOSE_CMD up -d --build --force-recreate
             echo "Waiting for database to initialize..."
             sleep 10
             create_admin_user

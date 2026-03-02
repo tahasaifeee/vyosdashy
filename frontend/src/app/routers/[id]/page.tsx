@@ -45,8 +45,8 @@ export default function RouterDashboard() {
         });
       }
       setCardStats({
-        cpu: latestData?.cpu_usage ? `${latestData.cpu_usage}%` : 'N/A',
-        mem: latestData?.memory_usage ? `${latestData.memory_usage}%` : 'N/A',
+        cpu: latestData?.cpu_usage != null ? `${latestData.cpu_usage}%` : 'N/A',
+        mem: latestData?.memory_usage != null ? `${latestData.memory_usage}%` : 'N/A',
         rx: formatBytes(totalRx),
         tx: formatBytes(totalTx)
       });

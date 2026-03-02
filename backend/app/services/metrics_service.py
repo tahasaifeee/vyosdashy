@@ -28,16 +28,27 @@ class MetricsService:
                     interfaces_res = await client.get_interface_stats()
                     bgp_res = await client.get_bgp_summary()
 
+                    iface_data = interfaces_res.get("data")
+                    bgp_data = bgp_res.get("data") if bgp_res.get("success") else None
+
+                    # Log what we got so issues are visible in `docker logs`
+                    print(f"[{router.name}] interfaces success={interfaces_res.get('success')}, "
+                          f"data_type={type(iface_data).__name__}")
+                    if not interfaces_res.get("success"):
+                        print(f"[{router.name}] interfaces error: {interfaces_res.get('error')}")
+
                     metrics = RouterMetrics(
                         router_id=router.id,
-                        interfaces=interfaces_res.get("data"),
-                        bgp_neighbors=bgp_res.get("data"),
+                        interfaces=iface_data if isinstance(iface_data, dict) else None,
+                        bgp_neighbors=bgp_data if isinstance(bgp_data, dict) else None,
                         cpu_usage=0.0,
                         memory_usage=0.0,
                     )
                     db.add(metrics)
                 except Exception as e:
+                    import traceback
                     print(f"Error fetching metrics for {router.name}: {e}")
+                    traceback.print_exc()
 
             db.add(router)
             await db.commit()

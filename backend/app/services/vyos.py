@@ -54,9 +54,10 @@ class VyOSClient:
         return await self._post("save", {})
 
     async def show_op(self, path: List[str]) -> Dict[str, Any]:
-        """Run operational command (e.g. ['interfaces'])"""
+        """Run operational command via /show endpoint (VyOS 1.4+).
+        Falls back gracefully — caller should check result.get('success')."""
         data = {"op": "show", "path": path}
-        return await self._post("retrieve", data)
+        return await self._post("show", data)
 
     async def test_connection(self) -> Dict[str, Any]:
         """Test if API is reachable and key is valid. Returns dict with success and optional error."""
@@ -70,8 +71,14 @@ class VyOSClient:
         return {"success": False, "error": str(error_msg)}
 
     async def get_interface_stats(self) -> Dict[str, Any]:
-        """Fetch all interface statistics"""
-        return await self.show_op(["interfaces"])
+        """Fetch interface data.
+        Tries operational /show endpoint first (VyOS 1.4+),
+        falls back to config showConfig (works on all versions)."""
+        result = await self.show_op(["interfaces"])
+        if result.get("success") and isinstance(result.get("data"), dict):
+            return result
+        # Fallback: config data (no runtime stats, but shows addresses/names)
+        return await self.get_config(["interfaces"])
 
     async def get_bgp_summary(self) -> Dict[str, Any]:
         """Fetch BGP summary (neighbors and status)"""

@@ -34,7 +34,16 @@ async def get_latest_metrics(
     metrics = result.scalars().first()
     if not metrics:
         return {"status": "offline", "data": None}
-    return metrics
+    return {
+        "id": metrics.id,
+        "router_id": metrics.router_id,
+        "timestamp": metrics.timestamp,
+        "cpu_usage": metrics.cpu_usage,
+        "memory_usage": metrics.memory_usage,
+        "uptime": metrics.uptime,
+        "interfaces": metrics.interfaces,
+        "bgp_neighbors": metrics.bgp_neighbors,
+    }
 
 @router.get("/{router_id}/history")
 async def get_metrics_history(
