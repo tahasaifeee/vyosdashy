@@ -67,5 +67,17 @@ async def get_metrics_history(
     )
     result = await db.execute(stmt)
     metrics = result.scalars().all()
-    # Reverse to get chronological order for charts
-    return metrics[::-1]
+    # Reverse to chronological order for charts, serialize to plain dicts
+    return [
+        {
+            "id": m.id,
+            "router_id": m.router_id,
+            "timestamp": m.timestamp,
+            "cpu_usage": m.cpu_usage,
+            "memory_usage": m.memory_usage,
+            "uptime": m.uptime,
+            "interfaces": m.interfaces,
+            "bgp_neighbors": m.bgp_neighbors,
+        }
+        for m in reversed(metrics)
+    ]
