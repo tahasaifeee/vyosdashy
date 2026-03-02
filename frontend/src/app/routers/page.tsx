@@ -60,10 +60,14 @@ export default function RoutersPage() {
 
   const testConnection = async (id: number) => {
     try {
-      await api.post(`/routers/${id}/test-connection`);
+      const response = await api.post(`/routers/${id}/test-connection`);
+      if (response.data.is_online === false) {
+        alert(`Connection Failed: ${response.data.error || 'Unknown error'}`);
+      }
       fetchRouters();
     } catch (err) {
       console.error('Test connection failed', err);
+      alert('Failed to trigger connection test. Check your network.');
     }
   };
 

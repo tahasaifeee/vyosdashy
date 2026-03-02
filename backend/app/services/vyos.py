@@ -4,7 +4,9 @@ from typing import Any, Dict, List, Optional
 
 class VyOSClient:
     def __init__(self, hostname: str, api_key: str, port: int = 443, protocol: str = "https"):
-        self.base_url = f"{protocol}://{hostname}:{port}"
+        # Sanitize hostname (remove http/https and trailing paths)
+        clean_hostname = hostname.replace("https://", "").replace("http://", "").split("/")[0].split(":")[0]
+        self.base_url = f"{protocol}://{clean_hostname}:{port}"
         self.api_key = api_key
         self.verify = False  # Usually VyOS has self-signed certs
 
@@ -19,7 +21,13 @@ class VyOSClient:
                 response = await client.post(url, data=payload)
                 response.raise_for_status()
                 return response.json()
-        except httpx.HTTPError as e:
+        except httpx.ConnectError:
+            return {"success": False, "error": f"Connection refused to {self.base_url}. Is the API enabled on the router?"}
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 403:
+                return {"success": False, "error": "Invalid API Key (403 Forbidden)"}
+            return {"success": False, "error": f"HTTP Error {e.response.status_code}"}
+        except Exception as e:
             return {"success": False, "error": str(e)}
 
     async def get_config(self, path: List[str] = []) -> Dict[str, Any]:
@@ -50,10 +58,12 @@ class VyOSClient:
         data = {"op": "show", "path": path}
         return await self._post("retrieve", data)
 
-    async def test_connection(self) -> bool:
-        """Test if API is reachable and key is valid"""
+    async def test_connection(self) -> Dict[str, Any]:
+        """Test if API is reachable and key is valid. Returns dict with success and optional error."""
         res = await self.get_config(["system", "host-name"])
-        return res.get("success", True) if "success" in res else False
+        if res.get("success") is True:
+            return {"success": True}
+        return {"success": False, "error": res.get("error", "Unknown API error")}
 
     async def get_interface_stats(self) -> Dict[str, Any]:
         """Fetch all interface statistics"""

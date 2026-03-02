@@ -18,7 +18,8 @@ class MetricsService:
             client = VyOSClient(hostname=router.hostname, api_key=router.api_key)
             
             # 1. Check Connectivity
-            is_online = await client.test_connection()
+            test_res = await client.test_connection()
+            is_online = test_res.get("success") is True
             router.status = RouterStatus.ONLINE if is_online else RouterStatus.OFFLINE
             router.last_seen = datetime.now()
             

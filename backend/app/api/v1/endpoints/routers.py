@@ -105,7 +105,8 @@ async def test_router_connection(
     
     from app.services.vyos import VyOSClient
     client = VyOSClient(hostname=router.hostname, api_key=router.api_key)
-    is_online = await client.test_connection()
+    test_res = await client.test_connection()
+    is_online = test_res.get("success") is True
     
     # Update status in DB
     from app.models.router import RouterStatus
@@ -117,7 +118,12 @@ async def test_router_connection(
     await db.commit()
     await db.refresh(router)
     
-    return {"id": id, "name": router.name, "is_online": is_online}
+    return {
+        "id": id, 
+        "name": router.name, 
+        "is_online": is_online,
+        "error": test_res.get("error")
+    }
 
 @router.delete("/{id}", response_model=RouterSchema)
 async def delete_router(
