@@ -29,7 +29,13 @@ async def create_user(email, password, full_name, role):
         user = result.scalars().first()
 
         if user:
-            print(f"User with email {email} already exists.")
+            print(f"User with email {email} already exists. Updating password...")
+            user.hashed_password = security.get_password_hash(password)
+            user.full_name = full_name
+            user.role = role
+            user.is_superuser = (role == "admin")
+            await session.commit()
+            print(f"User {email} updated successfully!")
             return
 
         # Create new user

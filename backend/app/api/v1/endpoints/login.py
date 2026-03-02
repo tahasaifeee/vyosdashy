@@ -9,10 +9,8 @@ from sqlalchemy.future import select
 from app.api import deps
 from app.core import security
 from app.core.config import settings
-from app.core.security import get_password_hash
 from app.models.user import User
 from app.schemas.token import Token
-from app.schemas.user import User as UserSchema
 
 router = APIRouter()
 
@@ -24,17 +22,26 @@ async def login_access_token(
     """
     OAuth2 compatible token login, get an access token for future requests
     """
+    print(f"DEBUG: Login attempt for user: {form_data.username}")
+    
     # Authenticate user
     stmt = select(User).where(User.email == form_data.username)
     result = await db.execute(stmt)
     user = result.scalars().first()
     
-    if not user or not security.verify_password(form_data.password, user.hashed_password):
+    if not user:
+        print(f"DEBUG: User {form_data.username} not found in database")
+        raise HTTPException(status_code=400, detail="Incorrect email or password")
+        
+    if not security.verify_password(form_data.password, user.hashed_password):
+        print(f"DEBUG: Password verification failed for user: {form_data.username}")
         raise HTTPException(status_code=400, detail="Incorrect email or password")
     
     if not user.is_active:
+        print(f"DEBUG: User {form_data.username} is inactive")
         raise HTTPException(status_code=400, detail="Inactive user")
         
+    print(f"DEBUG: Login successful for user: {form_data.username}")
     access_token_expires = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     return {
         "access_token": security.create_access_token(
