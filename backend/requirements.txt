@@ -5,6 +5,7 @@ psycopg2-binary
 asyncpg
 python-jose[cryptography]
 passlib[bcrypt]
+bcrypt==4.0.1
 python-multipart
 pydantic-settings
 requests
