@@ -1,6 +1,6 @@
 from typing import Any, List
 
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -28,6 +28,7 @@ async def read_routers(
 @router.post("/", response_model=RouterSchema)
 async def create_router(
     *,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(deps.get_db),
     router_in: RouterCreate,
     current_user: User = Depends(deps.get_current_user),
@@ -39,12 +40,11 @@ async def create_router(
     db.add(router)
     await db.commit()
     await db.refresh(router)
-    
+
     # Trigger immediate background collection so user doesn't see "Unknown" for 30s
     from app.services.metrics_service import MetricsService
-    import asyncio
-    asyncio.create_task(MetricsService.collect_metrics_by_id(router.id))
-    
+    background_tasks.add_task(MetricsService.collect_metrics_by_id, router.id)
+
     return router
 
 @router.get("/{id}", response_model=RouterSchema)

@@ -1,7 +1,6 @@
 fastapi[all]
 sqlalchemy[asyncio]
 alembic
-psycopg2-binary
 asyncpg
 python-jose[cryptography]
 passlib[bcrypt]

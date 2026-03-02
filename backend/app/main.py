@@ -34,12 +34,13 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# Set all CORS enabled origins
-# We use allow_origins=["*"] and allow_credentials=False because we use Bearer tokens in headers,
-# which works with wildcards and doesn't require the 'Credentials' flag.
+# CORS — use configured origins if provided, fall back to ["*"] for local dev.
+# Bearer tokens in headers (not cookies) work with wildcard origins and don't
+# require allow_credentials=True.
+cors_origins = [str(o) for o in settings.BACKEND_CORS_ORIGINS] if settings.BACKEND_CORS_ORIGINS else ["*"]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=cors_origins,
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],

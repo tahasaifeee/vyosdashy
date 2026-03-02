@@ -18,7 +18,7 @@ async def create_user(
     *,
     db: AsyncSession = Depends(deps.get_db),
     user_in: UserCreate,
-    # current_user: User = Depends(deps.get_current_active_superuser), # Uncomment to restrict
+    current_user: User = Depends(deps.get_current_active_superuser),
 ) -> Any:
     """
     Create new user.
@@ -45,7 +45,7 @@ async def create_user(
     return user
 
 @router.get("/me", response_model=UserSchema)
-def read_user_me(
+async def read_user_me(
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
     """

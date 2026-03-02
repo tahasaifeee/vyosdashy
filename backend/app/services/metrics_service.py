@@ -1,5 +1,5 @@
 import asyncio
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -16,87 +16,42 @@ class MetricsService:
             router = result.scalars().first()
             if not router:
                 return
-            
+
             client = VyOSClient(hostname=router.hostname, api_key=router.api_key)
             test_res = await client.test_connection()
             is_online = test_res.get("success") is True
             router.status = RouterStatus.ONLINE if is_online else RouterStatus.OFFLINE
-            router.last_seen = datetime.now()
-            
+            router.last_seen = datetime.now(timezone.utc)
+
             if is_online:
                 try:
-                    # Fetch all metrics
                     interfaces_res = await client.get_interface_stats()
                     bgp_res = await client.get_bgp_summary()
-                    uptime_res = await client.get_system_uptime()
-                    resource_res = await client.get_resource_usage()
 
-                    # Simple parsing for uptime (if it's a string from VyOS)
-                    uptime_data = uptime_res.get("data")
-                    # In a real app, we'd parse this string to seconds
-                    
                     metrics = RouterMetrics(
                         router_id=router.id,
                         interfaces=interfaces_res.get("data"),
                         bgp_neighbors=bgp_res.get("data"),
-                        # Placeholder for parsed values
-                        cpu_usage=0.0, 
+                        cpu_usage=0.0,
                         memory_usage=0.0,
                     )
                     db.add(metrics)
                 except Exception as e:
                     print(f"Error fetching metrics for {router.name}: {e}")
-            
-            db.add(router)
-            await db.commit()
 
-    @staticmethod
-    async def collect_metrics_for_router(router: Router):
-        async with AsyncSessionLocal() as db:
-            # Re-merge the router into the current session to avoid 'detached' error
-            router = await db.merge(router)
-            
-            client = VyOSClient(hostname=router.hostname, api_key=router.api_key)
-            
-            # 1. Check Connectivity
-            test_res = await client.test_connection()
-            is_online = test_res.get("success") is True
-            router.status = RouterStatus.ONLINE if is_online else RouterStatus.OFFLINE
-            router.last_seen = datetime.now()
-            
-            if is_online:
-                # 2. Fetch Detailed Metrics
-                try:
-                    # Async fetch
-                    interfaces_res = await client.get_interface_stats()
-                    bgp_res = await client.get_bgp_summary()
-                    uptime_res = await client.get_system_uptime()
-                    resource_res = await client.get_resource_usage()
-                    
-                    # Create Metric Entry
-                    metrics = RouterMetrics(
-                        router_id=router.id,
-                        interfaces=interfaces_res.get("data"),
-                        bgp_neighbors=bgp_res.get("data"),
-                        cpu_usage=0.0, 
-                        memory_usage=0.0,
-                    )
-                    db.add(metrics)
-                except Exception as e:
-                    print(f"Error fetching metrics for {router.name}: {e}")
-            
             db.add(router)
             await db.commit()
 
     @staticmethod
     async def collect_all_metrics():
         async with AsyncSessionLocal() as db:
-            result = await db.execute(select(Router).where(Router.is_enabled == True))
-            routers = result.scalars().all()
-            
-            # Use gather to process in parallel, but with separate sessions
-            tasks = [MetricsService.collect_metrics_for_router(r) for r in routers]
-            await asyncio.gather(*tasks)
+            result = await db.execute(select(Router.id).where(Router.is_enabled == True))
+            router_ids = result.scalars().all()
+
+        # Each collect_metrics_by_id opens its own session — safe to gather in parallel
+        tasks = [MetricsService.collect_metrics_by_id(rid) for rid in router_ids]
+        await asyncio.gather(*tasks)
+
 
 # Background runner function
 async def run_metrics_collector():
@@ -107,6 +62,6 @@ async def run_metrics_collector():
             print("Metrics collection completed.")
         except Exception as e:
             print(f"Metrics collection failed: {e}")
-        
-        # Poll every 30 seconds as per plan
+
+        # Poll every 30 seconds
         await asyncio.sleep(30)

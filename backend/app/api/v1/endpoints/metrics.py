@@ -1,6 +1,6 @@
 from typing import Any, List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -20,6 +20,10 @@ async def get_latest_metrics(
     """
     Get latest metrics for a specific router.
     """
+    router_result = await db.execute(select(Router).where(Router.id == router_id))
+    if not router_result.scalars().first():
+        raise HTTPException(status_code=404, detail="Router not found")
+
     stmt = (
         select(RouterMetrics)
         .where(RouterMetrics.router_id == router_id)
@@ -35,13 +39,17 @@ async def get_latest_metrics(
 @router.get("/{router_id}/history")
 async def get_metrics_history(
     router_id: int,
-    limit: int = 60, # ~30 mins of history if polled every 30s
+    limit: int = Query(default=60, ge=1, le=1000),
     db: AsyncSession = Depends(deps.get_db),
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
     """
     Get historical metrics for a router (for charts).
     """
+    router_result = await db.execute(select(Router).where(Router.id == router_id))
+    if not router_result.scalars().first():
+        raise HTTPException(status_code=404, detail="Router not found")
+
     stmt = (
         select(RouterMetrics)
         .where(RouterMetrics.router_id == router_id)

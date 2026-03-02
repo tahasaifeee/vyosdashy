@@ -21,21 +21,10 @@ export default function RouterDashboard() {
 
   const fetchData = async () => {
     try {
-      console.log('Fetching data for router:', id);
-      
       const [infoRes, latestRes, historyRes] = await Promise.all([
-        api.get(`/routers/${id}`).catch(e => {
-          console.error('Info API Error:', e);
-          throw e;
-        }),
-        api.get(`/metrics/${id}/latest`).catch(e => {
-          console.error('Latest Metrics API Error:', e);
-          throw e;
-        }),
-        api.get(`/metrics/${id}/history?limit=30`).catch(e => {
-          console.error('History Metrics API Error:', e);
-          throw e;
-        })
+        api.get(`/routers/${id}`),
+        api.get(`/metrics/${id}/latest`),
+        api.get(`/metrics/${id}/history?limit=30`),
       ]);
       const latestData = latestRes.data;
       setRouterInfo(infoRes.data);
@@ -62,8 +51,10 @@ export default function RouterDashboard() {
       });
       
       if (Array.isArray(historyRes.data)) {
-        setMetrics(historyRes.data.map((m: any) => {
-          // Simple throughput calculation: sum of rx_bytes + tx_bytes across all interfaces
+        const POLL_INTERVAL_SECONDS = 30;
+
+        // First pass: extract cumulative byte totals per sample
+        const rawPoints = historyRes.data.map((m: any) => {
           let totalBytes = 0;
           if (m.interfaces) {
             Object.values(m.interfaces).forEach((types: any) => {
@@ -74,15 +65,23 @@ export default function RouterDashboard() {
               });
             });
           }
-          
           return {
             time: new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            throughput: Math.round(totalBytes / 1024 / 1024 * 8 * 100) / 100 // Convert to Mbps
+            totalBytes,
           };
-        }));
+        });
+
+        // Second pass: compute throughput as delta between consecutive samples (Mbps)
+        // Math.max(0, ...) guards against counter resets after a router reboot
+        setMetrics(rawPoints.map((point: any, i: number) => ({
+          time: point.time,
+          throughput: i === 0
+            ? 0
+            : Math.round(Math.max(0, point.totalBytes - rawPoints[i - 1].totalBytes) / POLL_INTERVAL_SECONDS / 1024 / 1024 * 8 * 100) / 100,
+        })));
       }
     } catch (err) {
-      console.error('Failed to fetch dashboard data', err);
+      // silently handle — router may be temporarily unreachable
     } finally {
       setLoading(false);
     }

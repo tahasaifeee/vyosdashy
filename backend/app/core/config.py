@@ -7,8 +7,8 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     PROJECT_NAME: str = "VyOS UI Manager"
     API_V1_STR: str = "/api/v1"
-    SECRET_KEY: str = "your-secret-key-please-change-in-production"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 8  # 8 days
+    SECRET_KEY: str  # Required — generate with: python -c "import secrets; print(secrets.token_hex(32))"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60  # 1 hour
     BACKEND_CORS_ORIGINS: Union[List[AnyHttpUrl], str] = []
 
     @validator("BACKEND_CORS_ORIGINS", pre=True)
