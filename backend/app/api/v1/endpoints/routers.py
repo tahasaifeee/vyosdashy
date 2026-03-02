@@ -41,6 +41,22 @@ async def create_router(
     await db.refresh(router)
     return router
 
+@router.get("/{id}", response_model=RouterSchema)
+async def read_router(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    id: int,
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Get router by ID.
+    """
+    result = await db.execute(select(Router).where(Router.id == id))
+    router = result.scalars().first()
+    if not router:
+        raise HTTPException(status_code=404, detail="Router not found")
+    return router
+
 @router.put("/{id}", response_model=RouterSchema)
 async def update_router(
     *,

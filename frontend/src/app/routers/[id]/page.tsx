@@ -24,6 +24,7 @@ export default function RouterDashboard() {
         api.get(`/routers/${id}`),
         api.get(`/metrics/${id}/latest`),
         api.get(`/metrics/${id}/history?limit=30`)
+
       ]);
       setRouterInfo(infoRes.data);
       setLatest(latestRes.data);
