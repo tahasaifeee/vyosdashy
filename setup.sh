@@ -82,10 +82,10 @@ create_admin_user() {
         prompt_user "Admin Full Name [Admin User]: " "Admin User" ADMIN_NAME
         
         echo "Creating admin user in database..."
-        # We need to wait a bit for the DB to be ready if it's a fresh start
+        # Wait for the DB to be ready
         sleep 5
         docker exec -it vyosdashy-backend-1 python app/create_first_user.py "$ADMIN_EMAIL" "$ADMIN_PASSWORD" "$ADMIN_NAME" "admin" || \
-        echo "Failed to create user. Make sure containers are running and database is ready."
+        echo "Failed to create user. Please check container logs: docker logs vyosdashy-backend-1"
     fi
 }
 
@@ -102,16 +102,17 @@ reconfigure() {
 
     GENERATED_KEY=$(generate_secret_key)
     prompt_user "Secret Key (press Enter to use generated): " "$GENERATED_KEY" SECRET_KEY
-    prompt_user "Backend CORS Origins [http://localhost:3000,http://localhost:8000]: " '["http://localhost:3000", "http://localhost:8000"]' BACKEND_CORS_ORIGINS
+    prompt_user "Backend CORS Origins [http://localhost:3000,http://localhost:8000]: " "http://localhost:3000,http://localhost:8000" BACKEND_CORS_ORIGINS
     prompt_user "Next Public API URL [http://localhost:8000]: " "http://localhost:8000" NEXT_PUBLIC_API_URL
     prompt_user "Redis URL [redis://redis:6379/0]: " "redis://redis:6379/0" REDIS_URL
 
     DATABASE_URL="postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_SERVER}:5432/${POSTGRES_DB}"
 
+    # Generate .env file without single quotes around values to avoid Docker parsing issues
     cat << EOF > .env
 # Project Settings
-PROJECT_NAME="${PROJECT_NAME}"
-SECRET_KEY="${SECRET_KEY}"
+PROJECT_NAME=${PROJECT_NAME}
+SECRET_KEY=${SECRET_KEY}
 
 # Database Settings
 POSTGRES_SERVER=${POSTGRES_SERVER}
@@ -121,7 +122,7 @@ POSTGRES_DB=${POSTGRES_DB}
 DATABASE_URL=${DATABASE_URL}
 
 # Backend Settings
-BACKEND_CORS_ORIGINS='${BACKEND_CORS_ORIGINS}'
+BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS}
 REDIS_URL=${REDIS_URL}
 
 # Frontend Settings
@@ -135,8 +136,8 @@ EOF
         prompt_user "Restart containers to apply changes? (y/N): " "n" restart
         if [[ "$restart" =~ ^[Yy]$ ]]; then
             $DOCKER_COMPOSE_CMD up -d
-            create_admin_user
         fi
+        create_admin_user
     fi
 }
 
