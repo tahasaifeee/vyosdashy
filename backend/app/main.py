@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 from app.core.config import settings
 from app.api.api import api_router
 from app.services.metrics_service import run_metrics_collector
+from sqlalchemy import text
 from app.core.database import Base, engine
 
 @asynccontextmanager
@@ -18,6 +19,14 @@ async def lifespan(app: FastAPI):
         from app.models.metrics import RouterMetrics
         from app.models.alert import Alert
         await conn.run_sync(Base.metadata.create_all)
+        
+        # Manual migration for existing tables
+        try:
+            await conn.execute(text("ALTER TABLE router_metrics ADD COLUMN IF NOT EXISTS load_average JSON"))
+            await conn.execute(text("ALTER TABLE router_metrics ADD COLUMN IF NOT EXISTS active_sessions INTEGER DEFAULT 0"))
+            await conn.execute(text("ALTER TABLE router_metrics ADD COLUMN IF NOT EXISTS uptime INTEGER DEFAULT 0"))
+        except Exception as e:
+            print(f"Migration notice: {e}")
         
     # Start background tasks
     task = asyncio.create_task(run_metrics_collector())

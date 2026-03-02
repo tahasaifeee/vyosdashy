@@ -15,23 +15,24 @@ class MetricsService:
     @staticmethod
     def parse_legacy_uptime(text: str):
         """Parse uptime and load average from 'show system uptime' output."""
-        # Example: 10:20:30 up 1 day,  2:30,  1 user,  load average: 0.05, 0.10, 0.15
-        load_match = re.search(r"load average:\s+([\d.]+),\s+([\d.]+),\s+([\d.]+)", text)
-        uptime_seconds = 0
         load_avg = {"1m": 0.0, "5m": 0.0, "15m": 0.0}
+        uptime_seconds = 0
         
-        if load_match:
-            load_avg = {
-                "1m": float(load_match.group(1)),
-                "5m": float(load_match.group(2)),
-                "15m": float(load_match.group(3))
-            }
-        
-        # Simple uptime parsing (very approximate)
-        if "up" in text:
-            uptime_part = text.split("up")[1].split(",")[0].strip()
-            # This is a placeholder; real parsing would be more complex
-            uptime_seconds = 3600 # default
+        try:
+            load_match = re.search(r"load average:\s+([\d.]+),\s+([\d.]+),\s+([\d.]+)", text)
+            if load_match:
+                load_avg = {
+                    "1m": float(load_match.group(1)),
+                    "5m": float(load_match.group(2)),
+                    "15m": float(load_match.group(3))
+                }
+            
+            if "up" in text:
+                uptime_part = text.split("up")[1].split(",")[0].strip()
+                # Dummy conversion for now
+                uptime_seconds = 3600
+        except:
+            pass
             
         return uptime_seconds, load_avg
 
@@ -43,103 +44,83 @@ class MetricsService:
             if not router:
                 return
 
-            old_status = router.status
             client = VyOSClient(hostname=router.hostname, api_key=router.api_key)
             test_res = await client.test_connection()
             is_online = test_res.get("success") is True
+            
+            old_status = router.status
             new_status = RouterStatus.ONLINE if is_online else RouterStatus.OFFLINE
             router.status = new_status
             router.last_seen = datetime.now(timezone.utc)
 
-            # Alert on status change
             if old_status != RouterStatus.UNKNOWN and old_status != new_status:
-                severity = AlertSeverity.CRITICAL if new_status == RouterStatus.OFFLINE else AlertSeverity.INFO
-                message = f"Router '{router.name}' status changed to {new_status}"
-                db.add(Alert(router_id=router.id, severity=severity, message=message, alert_type="status_change"))
+                db.add(Alert(router_id=router.id, severity=AlertSeverity.CRITICAL if not is_online else AlertSeverity.INFO, 
+                             message=f"Router {router.name} is now {new_status}", alert_type="status_change"))
 
             if is_online:
+                # ── Data Collection ──────────────────────────────────────────
+                iface_data, bgp_data = {}, {}
+                cpu_usage, memory_usage, uptime = 0.0, 0.0, 0
+                load_avg = {"1m": 0.0, "5m": 0.0, "15m": 0.0}
+
+                # 1. Interfaces (REST)
                 try:
-                    # Attempt concurrent fetches
-                    iface_config_res, bgp_config_res, counters, sys_info = await asyncio.gather(
-                        client.get_interface_config(),    # REST /retrieve
-                        client.get_bgp_config(),          # REST /retrieve
-                        client.get_interface_counters(),  # GraphQL
-                        client.get_system_info(),         # GraphQL
-                    )
+                    res = await client.get_interface_config()
+                    if res.get("success"): iface_data = res.get("data", {})
+                except: pass
 
-                    iface_data = iface_config_res.get("data") if iface_config_res.get("success") else None
-                    bgp_data = bgp_config_res.get("data") if bgp_config_res.get("success") else None
+                # 2. BGP (REST)
+                try:
+                    res = await client.get_bgp_config()
+                    if res.get("success"): bgp_data = res.get("data", {})
+                except: pass
 
-                    # Merge GraphQL interface counters
-                    if isinstance(counters, list) and isinstance(iface_data, dict):
-                        for counter in counters:
-                            ifname = counter.get("ifname", "")
-                            for iface_type, ifaces in iface_data.items():
-                                if isinstance(ifaces, dict) and ifname in ifaces:
-                                    ifaces[ifname]["rx-bytes"] = counter.get("rx_bytes", 0)
-                                    ifaces[ifname]["tx-bytes"] = counter.get("tx_bytes", 0)
-                                    ifaces[ifname]["rx-packets"] = counter.get("rx_packets", 0)
-                                    ifaces[ifname]["tx-packets"] = counter.get("tx_packets", 0)
+                # 3. System Metrics (GraphQL Primary)
+                sys_info = None
+                try:
+                    sys_info = await client.get_system_info()
+                except: pass
 
-                    # Initialize default metrics
-                    cpu_usage = 0.0
-                    memory_usage = 0.0
-                    uptime = 0
-                    load_avg = {"1m": 0.0, "5m": 0.0, "15m": 0.0}
-                    active_sessions = 0
-
-                    # Use GraphQL if available
-                    if isinstance(sys_info, dict):
-                        cpu_load = sys_info.get("cpu_load_average") or {}
-                        load_avg = {
-                            "1m": float(cpu_load.get("one_minute", 0.0)),
-                            "5m": float(cpu_load.get("five_minute", 0.0)),
-                            "15m": float(cpu_load.get("fifteen_minute", 0.0))
-                        }
+                if sys_info and isinstance(sys_info, dict):
+                    cpu_l = sys_info.get("cpu_load_average") or {}
+                    load_avg = {"1m": float(cpu_l.get("one_minute", 0)), "5m": float(cpu_l.get("five_minute", 0)), "15m": float(cpu_l.get("fifteen_minute", 0))}
+                    cpu_usage = load_avg["1m"]
+                    mem = sys_info.get("memory") or {}
+                    if mem.get("total", 0) > 0:
+                        memory_usage = round(mem.get("used", 0) / mem.get("total") * 100, 1)
+                    uptime = int(sys_info.get("uptime", 0))
+                else:
+                    # Legacy Fallback
+                    try:
+                        up_text = await client.get_legacy_system_stats()
+                        uptime, load_avg = MetricsService.parse_legacy_uptime(up_text)
                         cpu_usage = load_avg["1m"]
-                        mem = sys_info.get("memory") or {}
-                        total = mem.get("total", 0)
-                        used = mem.get("used", 0)
-                        if total > 0:
-                            memory_usage = round(used / total * 100, 1)
-                        try:
-                            uptime = int(sys_info.get("uptime", "0"))
-                        except:
-                            uptime = 0
-                    else:
-                        # FALLBACK: Try Legacy /show text commands
-                        print(f"[{router.name}] GraphQL unavailable, attempting legacy fallback...")
-                        legacy_uptime_text = await client.get_legacy_system_stats()
-                        if not legacy_uptime_text.startswith("Error:"):
-                            uptime, load_avg = MetricsService.parse_legacy_uptime(legacy_uptime_text)
-                            cpu_usage = load_avg["1m"]
-                        
-                        # We try to mark it online even with config-only data
-                        if iface_data:
-                            # Use config data as baseline even without counters
-                            pass
+                    except: pass
 
-                    # Ensure we save SOMETHING if the router is reachable
-                    metrics = RouterMetrics(
-                        router_id=router.id,
-                        interfaces=iface_data if isinstance(iface_data, dict) else {},
-                        bgp_neighbors=bgp_data if isinstance(bgp_data, dict) else {},
-                        cpu_usage=cpu_usage,
-                        memory_usage=memory_usage,
-                        uptime=uptime,
-                        load_average=load_avg,
-                        active_sessions=active_sessions
-                    )
-                    db.add(metrics)
+                # 4. Interface Counters (GraphQL)
+                try:
+                    counters = await client.get_interface_counters()
+                    if isinstance(counters, list):
+                        for c in counters:
+                            ifname = c.get("ifname")
+                            for _, ifaces in iface_data.items():
+                                if isinstance(ifaces, dict) and ifname in ifaces:
+                                    ifaces[ifname].update({"rx-bytes": c.get("rx_bytes", 0), "tx-bytes": c.get("tx_bytes", 0),
+                                                           "rx-packets": c.get("rx_packets", 0), "tx-packets": c.get("tx_packets", 0)})
+                except: pass
 
-                    # Alerts
-                    if cpu_usage > 4.0:
-                        db.add(Alert(router_id=router.id, severity=AlertSeverity.WARNING, message=f"High CPU Load ({cpu_usage}) on {router.name}", alert_type="cpu_high"))
-                    if memory_usage > 90.0:
-                        db.add(Alert(router_id=router.id, severity=AlertSeverity.CRITICAL, message=f"Memory Critical ({memory_usage}%) on {router.name}", alert_type="mem_high"))
-
-                except Exception as e:
-                    print(f"Error collecting metrics for {router.name}: {e}")
+                # ── Save Metrics ──────────────────────────────────────────────
+                metrics = RouterMetrics(
+                    router_id=router.id,
+                    interfaces=iface_data,
+                    bgp_neighbors=bgp_data,
+                    cpu_usage=cpu_usage,
+                    memory_usage=memory_usage,
+                    uptime=uptime,
+                    load_average=load_avg,
+                    active_sessions=0
+                )
+                db.add(metrics)
 
             db.add(router)
             await db.commit()
@@ -148,16 +129,14 @@ class MetricsService:
     async def collect_all_metrics():
         async with AsyncSessionLocal() as db:
             result = await db.execute(select(Router.id).where(Router.is_enabled == True))
-            router_ids = result.scalars().all()
-
-        tasks = [MetricsService.collect_metrics_by_id(rid) for rid in router_ids]
-        await asyncio.gather(*tasks)
-
+            ids = result.scalars().all()
+        for rid in ids:
+            try:
+                await MetricsService.collect_metrics_by_id(rid)
+            except Exception as e:
+                print(f"Error in collection for router {rid}: {e}")
 
 async def run_metrics_collector():
     while True:
-        try:
-            await MetricsService.collect_all_metrics()
-        except Exception as e:
-            print(f"Metrics collection failed: {e}")
+        await MetricsService.collect_all_metrics()
         await asyncio.sleep(30)
