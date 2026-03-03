@@ -270,6 +270,12 @@ update_app() {
         rm -f /tmp/vyos_backend_env_backup
     fi
 
+    # Clear stale Python bytecode caches so updated source files are always loaded.
+    # Volume-mounted containers read .py files from the host; stale .pyc files in
+    # __pycache__ can cause Python to silently serve old code after a git pull.
+    echo "Clearing Python bytecode caches..."
+    find ./backend -type d -name "__pycache__" -exec rm -rf {} + 2>/dev/null || true
+
     if [ -n "$DOCKER_COMPOSE_CMD" ]; then
         echo "Rebuilding and restarting..."
         $DOCKER_COMPOSE_CMD up -d --build --force-recreate
