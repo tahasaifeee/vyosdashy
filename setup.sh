@@ -95,8 +95,9 @@ view_live_logs() {
 
     case $log_choice in
         1) $DOCKER_COMPOSE_CMD logs -f ;;
-        2) echo "Filtering for errors... (Ctrl+C to stop)"
-           $DOCKER_COMPOSE_CMD logs -f | grep --line-buffered -iE "error|exception|traceback|failed|invalid|import" ;;
+        echo "Monitoring for Errors (Press Ctrl+C to stop)..."
+        $DOCKER_COMPOSE_CMD logs -f | grep --line-buffered -iE "\b(error|exception|traceback|failed|invalid|import|critical|fatal)\b" ;;
+
         3) $DOCKER_COMPOSE_CMD logs -f backend ;;
         4) $DOCKER_COMPOSE_CMD logs -f frontend ;;
         5) $DOCKER_COMPOSE_CMD logs -f db ;;
