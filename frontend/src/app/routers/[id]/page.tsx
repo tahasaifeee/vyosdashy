@@ -8,11 +8,11 @@ import {
   Activity, ArrowDown, ArrowUp, Cpu, Server, ShieldCheck,
   Network, Globe, Lock, Radio, GitBranch, HardDrive,
   CheckCircle2, XCircle, Route, Wifi, TerminalSquare, RefreshCw, ChevronLeft,
-  Database, Zap, Clock, Maximize2, Layers, Monitor, HardDriveDownload, HardDriveUpload,
+  Maximize2, Layers, Monitor, HardDriveDownload, HardDriveUpload,
   List, Terminal, Search, ChevronDown, ChevronUp, Download, Settings2, Check,
   LayoutDashboard, FileText, ActivitySquare, Shield, Menu, X as CloseIcon,
-  Play, Save, Globe2
-} from 'lucide-react';
+  Play, Save, Globe2, Key, Fingerprint, ShieldAlert
+  } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { DashboardSkeleton } from '@/components/Skeleton';
 import { AnimatedNumber } from '@/components/AnimatedNumber';
@@ -267,6 +267,8 @@ export default function RouterDashboard() {
     const dhcpCfg = routerConfig.service?.['dhcp-server'];
     const wgCfg = routerConfig.interfaces?.wireguard;
     const ospfCfg = routerConfig.protocols?.ospf;
+    const vpn = routerConfig.vpn || {};
+    const remoteAccess = vpn['remote-access'] || {};
     return {
       bgp: !!bgpCfg,
       bgpPeers: Object.keys(bgpCfg?.neighbor || {}).length,
@@ -277,6 +279,14 @@ export default function RouterDashboard() {
       fwPolicies: Object.keys(fwCfg?.ipv4?.name || fwCfg?.name || {}).length,
       wireguard: !!wgCfg,
       wgPeers: Object.values(wgCfg || {}).reduce((n: number, w: any) => n + Object.keys(w?.peer || {}).length, 0) as number,
+      vpn: {
+        ipsec: !!vpn.ipsec,
+        l2tp: !!(vpn.l2tp || remoteAccess.l2tp),
+        openconnect: !!(vpn.openconnect || remoteAccess.openconnect),
+        pptp: !!(vpn.pptp || remoteAccess.pptp),
+        rsa: !!vpn['rsa-keys'],
+        sstp: !!(vpn.sstp || remoteAccess.sstp)
+      }
     };
   }, [routerConfig]);
 
@@ -365,6 +375,19 @@ export default function RouterDashboard() {
             </div>
 
             <div className="space-y-8">
+              {/* Category: Security */}
+              <div>
+                <SidebarCategory label="Security & VPN" />
+                <div className="mt-2 space-y-1">
+                  <SidebarItem 
+                    active={activeTab === 'vpn'} 
+                    onClick={() => setActiveTab('vpn')} 
+                    icon={<Lock className="w-4 h-4" />} 
+                    label="VPN Gateway" 
+                  />
+                </div>
+              </div>
+
               {/* Category: Monitor */}
               <div>
                 <SidebarCategory label="Monitor" />
@@ -547,6 +570,18 @@ export default function RouterDashboard() {
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                   <div className="lg:col-span-2 space-y-8">
+                    {/* VPN Gateway */}
+                    <DashboardCard title="VPN Control Gateway">
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-6">
+                        <ProtocolRow label="IPsec VPN" active={configStatus?.vpn?.ipsec} detail="Secure Tunnel" />
+                        <ProtocolRow label="L2TP Remote" active={configStatus?.vpn?.l2tp} detail="Client Access" />
+                        <ProtocolRow label="OpenConnect" active={configStatus?.vpn?.openconnect} detail="SSL VPN" />
+                        <ProtocolRow label="PPTP Server" active={configStatus?.vpn?.pptp} detail="Legacy Access" />
+                        <ProtocolRow label="SSTP Server" active={configStatus?.vpn?.sstp} detail="Windows VPN" />
+                        <ProtocolRow label="RSA Keys" active={configStatus?.vpn?.rsa} detail="Auth Assets" />
+                      </div>
+                    </DashboardCard>
+
                     {/* Traffic Chart */}
                     <DashboardCard 
                       title="Throughput Monitor (Mbps)" 
