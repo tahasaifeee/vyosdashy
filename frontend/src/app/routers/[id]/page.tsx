@@ -466,23 +466,95 @@ export default function RouterDashboard() {
                   </div>
                 </div>
               </div>
-            ) : (
-              <DashboardCard title={activeTab.replace('-', ' ')}>
-                <pre className="bg-slate-900 text-slate-300 p-8 rounded-3xl font-mono text-xs overflow-x-auto min-h-[400px]">
-                  {loadingTab ? 'Querying router...' : (
-                    activeTab === 'routes' ? JSON.stringify(routingTable, null, 2) :
-                    activeTab === 'interfaces' ? JSON.stringify(interfacesList, null, 2) :
-                    activeTab === 'logs' ? logs.join('\n') :
-                    activeTab === 'conntrack' ? conntrack :
-                    activeTab === 'top' ? processes :
-                    activeTab === 'arp' ? arpTable :
-                    activeTab === 'leases' ? dhcpLeases :
-                    activeTab === 'nat' ? natTranslations :
-                    'No data available for this tab.'
-                  )}
-                </pre>
-              </DashboardCard>
-            )}
+                    {activeTab === 'interfaces' && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        {interfacesList.map((iface) => (
+                          <div key={iface.name} className="bg-white dark:bg-white/5 rounded-3xl border border-slate-200 dark:border-white/10 overflow-hidden group hover:border-primary/50 transition-all">
+                            <div className="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between bg-slate-50/50 dark:bg-white/5">
+                              <div className="flex items-center gap-4">
+                                <div className={`p-3 rounded-2xl ${iface.type === 'ethernet' ? 'bg-primary/10 text-primary' : 'bg-slate-200 dark:bg-white/10 text-slate-500'}`}>
+                                  {iface.type === 'ethernet' ? <Network className="w-5 h-5" /> : <RefreshCw className="w-5 h-5" />}
+                                </div>
+                                <div>
+                                  <h5 className="font-black text-slate-900 dark:text-white leading-none">{iface.name}</h5>
+                                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">{iface.type}</p>
+                                </div>
+                              </div>
+                              <div className={`w-2 h-2 rounded-full ${iface.state === 'up' || iface['rx-bytes'] > 0 ? 'bg-success shadow-glow' : 'bg-slate-300'}`} />
+                            </div>
+                            <div className="p-6 space-y-6">
+                              <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1">
+                                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-tight">IP Address</p>
+                                  <p className="text-xs font-bold font-mono text-slate-700 dark:text-slate-300">{iface.address || 'Unassigned'}</p>
+                                </div>
+                                <div className="space-y-1">
+                                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-tight">Hardware ID</p>
+                                  <p className="text-xs font-bold font-mono text-slate-700 dark:text-slate-300 truncate" title={iface['hw-id']}>{iface['hw-id'] || 'N/A'}</p>
+                                </div>
+                              </div>
+                              
+                              <div className="grid grid-cols-2 gap-6 pt-4 border-t border-slate-100 dark:border-white/5">
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-2 text-info">
+                                    <ArrowDown className="w-3 h-3" />
+                                    <span className="text-[10px] font-black uppercase">Received</span>
+                                  </div>
+                                  <div>
+                                    <p className="text-lg font-black tracking-tighter leading-none">{formatBytes(iface['rx-bytes'])}</p>
+                                    <p className="text-[10px] font-bold text-slate-500 mt-1">{iface['rx-packets']?.toLocaleString()} Packets</p>
+                                  </div>
+                                </div>
+                                <div className="space-y-3">
+                                  <div className="flex items-center gap-2 text-primary">
+                                    <ArrowUp className="w-3 h-3" />
+                                    <span className="text-[10px] font-black uppercase">Transmitted</span>
+                                  </div>
+                                  <div>
+                                    <p className="text-lg font-black tracking-tighter leading-none">{formatBytes(iface['tx-bytes'])}</p>
+                                    <p className="text-[10px] font-bold text-slate-500 mt-1">{iface['tx-packets']?.toLocaleString()} Packets</p>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {activeTab === 'routes' ? (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left text-xs">
+                          <thead>
+                            <tr className="border-b dark:border-white/5">
+                              <th className="py-3 px-4 font-black uppercase text-slate-500">Protocol</th>
+                              <th className="py-3 px-4 font-black uppercase text-slate-500">Network</th>
+                              <th className="py-3 px-4 font-black uppercase text-slate-500">Next Hop</th>
+                              <th className="py-3 px-4 font-black uppercase text-slate-500">Interface</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {routingTable.map((route, i) => (
+                              <tr key={i} className="border-b dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                                <td className="py-3 px-4"><span className={`px-2 py-1 rounded font-bold uppercase text-[10px] ${route.selected ? 'bg-success/10 text-success' : 'bg-slate-100 text-slate-500'}`}>{route.protocol}</span></td>
+                                <td className="py-3 px-4 font-mono font-bold">{route.prefix}</td>
+                                <td className="py-3 px-4 font-mono">{route.next_hop?.next_hop || 'Direct'}</td>
+                                <td className="py-3 px-4 text-slate-500">{route.next_hop?.interface || '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    ) : (
+                      <pre className="bg-slate-900 text-slate-300 p-8 rounded-3xl font-mono text-xs overflow-x-auto min-h-[400px]">
+                        {activeTab === 'conntrack' ? conntrack : 
+                         activeTab === 'top' ? processes : 
+                         activeTab === 'arp' ? arpTable : 
+                         activeTab === 'leases' ? dhcpLeases : 
+                         activeTab === 'nat' ? natTranslations : 
+                         activeTab === 'logs' ? logs.join('\n') :
+                         'No data available.'}
+                      </pre>
+                    )}
           </div>
         </main>
       </div>
