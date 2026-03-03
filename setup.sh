@@ -4,6 +4,9 @@
 
 set -e
 
+# Print an error message and exit on unexpected failures
+trap 'echo "" >&2; echo "Error: Script failed at line $LINENO. Run with bash -x setup.sh for details." >&2' ERR
+
 echo "----------------------------------------"
 echo "   VyOS UI Manager - Master Script"
 echo "----------------------------------------"
@@ -25,7 +28,7 @@ install_if_missing() {
     fi
 }
 
-# Helper for interactive input
+# Helper for interactive input — avoids eval so special chars in input are safe
 prompt_user() {
     local prompt_text=$1
     local default_value=$2
@@ -35,12 +38,12 @@ prompt_user() {
     printf "%s" "$prompt_text" >&2
     if read -r input_val < /dev/tty; then
         if [ -z "$input_val" ]; then
-            eval "$result_var=\"$default_value\""
+            printf -v "$result_var" '%s' "$default_value"
         else
-            eval "$result_var=\"$input_val\""
+            printf -v "$result_var" '%s' "$input_val"
         fi
     else
-        eval "$result_var=\"$default_value\""
+        printf -v "$result_var" '%s' "$default_value"
     fi
 }
 
@@ -84,6 +87,10 @@ DOCKER_COMPOSE_CMD=$(detect_docker_compose)
 
 view_live_logs() {
     echo ""
+    if [ -z "$DOCKER_COMPOSE_CMD" ]; then
+        echo "Error: Docker Compose not found."
+        return
+    fi
     echo "--- Live Log Stream ---"
     echo "1) All Services (Standard)"
     echo "2) All Services (Errors Only)"
@@ -95,9 +102,11 @@ view_live_logs() {
 
     case $log_choice in
         1) $DOCKER_COMPOSE_CMD logs -f ;;
-        echo "Monitoring for Errors (Press Ctrl+C to stop)..."
-        $DOCKER_COMPOSE_CMD logs -f | grep --line-buffered -iE "\b(error|exception|traceback|failed|invalid|import|critical|fatal)\b" ;;
-
+        2)
+            echo "Monitoring for Errors (Press Ctrl+C to stop)..."
+            # Allow grep to return non-zero (no matches) without triggering set -e
+            $DOCKER_COMPOSE_CMD logs -f | grep --line-buffered -iE "\b(error|exception|traceback|failed|invalid|import|critical|fatal)\b" || true
+            ;;
         3) $DOCKER_COMPOSE_CMD logs -f backend ;;
         4) $DOCKER_COMPOSE_CMD logs -f frontend ;;
         5) $DOCKER_COMPOSE_CMD logs -f db ;;
@@ -115,11 +124,11 @@ check_status_and_diagnostics() {
 
     echo "Container Status:"
     $DOCKER_COMPOSE_CMD ps
-    
+
     echo ""
     echo "--- Recent Backend Activity ---"
     $DOCKER_COMPOSE_CMD logs --tail=20 backend || echo "Failed to get backend logs."
-    
+
     echo ""
     echo "--- Connectivity Check ---"
     echo "Waiting for API to respond (up to 60s)..."
@@ -154,7 +163,7 @@ create_admin_user() {
         prompt_user "Admin Email [admin@example.com]: " "admin@example.com" ADMIN_EMAIL
         prompt_user "Admin Password: " "secure_password" ADMIN_PASSWORD
         prompt_user "Admin Full Name [Admin User]: " "Admin User" ADMIN_NAME
-        
+
         echo "Creating admin user in database..."
         # Wait for the DB to be ready
         sleep 5
@@ -172,7 +181,7 @@ create_admin_user() {
 reconfigure() {
     echo ""
     echo "--- Reconfiguration ---"
-    
+
     PUBLIC_IP=$(get_public_ip)
     DEFAULT_API_URL="http://${PUBLIC_IP}:8000"
 
@@ -207,7 +216,7 @@ EOF
 
     cp .env backend/.env
     echo ".env files updated."
-    
+
     if [ -n "$DOCKER_COMPOSE_CMD" ]; then
         prompt_user "Rebuild and restart containers to apply changes? (y/N): " "n" restart
         if [[ "$restart" =~ ^[Yy]$ ]]; then
@@ -245,7 +254,16 @@ update_app() {
         fi
     done
 
-    git merge FETCH_HEAD
+    if ! git merge FETCH_HEAD; then
+        echo ""
+        echo "Error: Merge failed due to conflicts. Resolve them manually, then re-run the script."
+        # Restore backend .env if we backed it up
+        if [ -f /tmp/vyos_backend_env_backup ]; then
+            cp /tmp/vyos_backend_env_backup backend/.env
+            rm -f /tmp/vyos_backend_env_backup
+        fi
+        exit 1
+    fi
 
     if [ -f /tmp/vyos_backend_env_backup ]; then
         cp /tmp/vyos_backend_env_backup backend/.env
@@ -280,8 +298,10 @@ uninstall_app() {
         fi
     fi
 
+    # Capture the current directory name before moving up, so we know what to delete
+    INSTALL_DIR=$(basename "$PWD")
     cd ..
-    if [[ "$(basename "$PWD")" != "vyosdashy" ]]; then
+    if [[ "$INSTALL_DIR" == "vyosdashy" ]]; then
         rm -rf vyosdashy
         exit 0
     fi
@@ -290,12 +310,15 @@ uninstall_app() {
 install_app() {
     echo ""
     echo "--- Fresh Installation ---"
-    
+
     if [ ! -d ".git" ]; then
         if [ -d "vyosdashy" ]; then
             cd vyosdashy
         else
-            git clone https://github.com/tahasaifeee/vyosdashy.git vyosdashy
+            if ! git clone https://github.com/tahasaifeee/vyosdashy.git vyosdashy; then
+                echo "Error: Failed to clone repository. Check your internet connection and try again."
+                exit 1
+            fi
             cd vyosdashy
         fi
     fi
