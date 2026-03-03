@@ -128,6 +128,7 @@ export default function RouterDashboard() {
   const [routingTable, setRoutingTable] = useState<any[]>([]);
   const [logs, setLogs] = useState<string[]>([]);
   const [conntrack, setConntrack] = useState<string>('');
+  const [processes, setProcesses] = useState<string>('');
   const [loadingTab, setLoadingTab] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
@@ -213,6 +214,9 @@ export default function RouterDashboard() {
       } else if (activeTab === 'conntrack') {
         const res = await api.get(`/routers/${id}/connections`);
         setConntrack(res.data.stats || '');
+      } else if (activeTab === 'top') {
+        const res = await api.get(`/routers/${id}/top`);
+        setProcesses(res.data.output || '');
       }
     } catch (err: any) {
       console.error('Failed to load tab data:', err.message || err);
@@ -223,12 +227,17 @@ export default function RouterDashboard() {
 
   useEffect(() => {
     fetchData();
-    const iv = setInterval(fetchData, 30000);
+    const iv = setInterval(fetchData, 5000);
     return () => clearInterval(iv);
   }, [id, timeRange]);
 
   useEffect(() => {
     fetchTabData();
+    let iv: any;
+    if (activeTab === 'top' || activeTab === 'conntrack') {
+      iv = setInterval(fetchTabData, 5000);
+    }
+    return () => iv && clearInterval(iv);
   }, [activeTab]);
 
   const handlePing = async (e: React.FormEvent) => {
@@ -390,6 +399,12 @@ export default function RouterDashboard() {
                     onClick={() => setActiveTab('conntrack')} 
                     icon={<ActivitySquare className="w-4 h-4" />} 
                     label="Live Connections" 
+                  />
+                  <SidebarItem 
+                    active={activeTab === 'top'} 
+                    onClick={() => setActiveTab('top')} 
+                    icon={<Cpu className="w-4 h-4" />} 
+                    label="Process Monitor" 
                   />
                 </div>
               </div>
@@ -807,6 +822,20 @@ export default function RouterDashboard() {
                       <pre className="bg-slate-100 dark:bg-dark-900/50 p-6 rounded-2xl border border-slate-200 dark:border-white/5 font-mono text-xs text-slate-700 dark:text-slate-300 overflow-x-auto whitespace-pre-wrap shadow-inner p-6">
                         {conntrack || 'No connection statistics available.'}
                       </pre>
+                    )}
+                    {activeTab === 'top' && (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between px-2">
+                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />
+                            Live Process Stream
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-400">Updates every 5s</span>
+                        </div>
+                        <pre className="bg-slate-100 dark:bg-dark-900/50 p-8 rounded-3xl border border-slate-200 dark:border-white/5 font-mono text-[11px] text-slate-700 dark:text-slate-300 overflow-x-auto whitespace-pre shadow-inner custom-scrollbar min-h-[600px]">
+                          {processes || 'Initializing process monitor...'}
+                        </pre>
+                      </div>
                     )}
                     {activeTab === 'ping' && (
                       <div className="space-y-6">
