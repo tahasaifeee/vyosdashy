@@ -464,9 +464,19 @@ export default function RouterDashboard() {
                 </div>
               </div>
             ) : (
-              <DashboardCard title={activeTab}>
-                <pre className="bg-slate-900 text-slate-300 p-8 rounded-3xl font-mono text-xs overflow-x-auto">
-                  {activeTab === 'conntrack' ? conntrack : activeTab === 'top' ? processes : activeTab === 'arp' ? arpTable : activeTab === 'leases' ? dhcpLeases : activeTab === 'nat' ? natTranslations : 'Select a tab...'}
+              <DashboardCard title={activeTab.replace('-', ' ')}>
+                <pre className="bg-slate-900 text-slate-300 p-8 rounded-3xl font-mono text-xs overflow-x-auto min-h-[400px]">
+                  {loadingTab ? 'Querying router...' : (
+                    activeTab === 'routes' ? JSON.stringify(routingTable, null, 2) :
+                    activeTab === 'interfaces' ? JSON.stringify(interfacesList, null, 2) :
+                    activeTab === 'logs' ? logs.join('\n') :
+                    activeTab === 'conntrack' ? conntrack :
+                    activeTab === 'top' ? processes :
+                    activeTab === 'arp' ? arpTable :
+                    activeTab === 'leases' ? dhcpLeases :
+                    activeTab === 'nat' ? natTranslations :
+                    'No data available for this tab.'
+                  )}
                 </pre>
               </DashboardCard>
             )}
