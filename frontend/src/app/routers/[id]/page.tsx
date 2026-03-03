@@ -36,6 +36,14 @@ function getIfaceTx(d: any) {
   const val = d?.['tx-bytes'] ?? d?.stats?.tx_bytes ?? 0;
   return typeof val === 'string' ? parseInt(val.replace(/,/g, '')) : parseInt(val);
 }
+function getIfaceRxPackets(d: any) {
+  const val = d?.['rx-packets'] ?? d?.stats?.rx_packets ?? 0;
+  return typeof val === 'string' ? parseInt(val.replace(/,/g, '')) : parseInt(val);
+}
+function getIfaceTxPackets(d: any) {
+  const val = d?.['tx-packets'] ?? d?.stats?.tx_packets ?? 0;
+  return typeof val === 'string' ? parseInt(val.replace(/,/g, '')) : parseInt(val);
+}
 function sumIfaceBytes(interfaces: any) {
   let rx = 0, tx = 0;
   if (!interfaces || typeof interfaces !== 'object') return { rx, tx };
@@ -63,8 +71,6 @@ function sumIfaceBytes(interfaces: any) {
   }
 
   return { rx, tx };
-}
-
 }
 
 function extractBgpNeighbors(raw: any): Record<string, any> | null {
