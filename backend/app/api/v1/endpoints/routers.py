@@ -234,19 +234,22 @@ async def get_router_processes(
     return {"output": output}
 
 @router.post("/{id}/command")
-async def run_custom_show_command(
+async def run_router_command(
     *,
     db: AsyncSession = Depends(deps.get_db),
     id: int,
-    command: List[str] = Body(..., embed=True),
+    command: str = Body(..., embed=True),
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
+    """
+    Run any VyOS command (show, set, delete, commit, save, etc.)
+    """
     result = await db.execute(select(Router).where(Router.id == id))
     router_obj = result.scalars().first()
     if not router_obj:
         raise HTTPException(status_code=404, detail="Router not found")
     client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
-    output = await client.show_text(command)
+    output = await client.run_raw_command(command)
     return {"output": output}
 
 @router.get("/{id}/bgp/summary")

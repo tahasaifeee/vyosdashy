@@ -258,6 +258,52 @@ class VyOSClient:
         except Exception as e:
             return f"Exception: {str(e)}"
 
+    async def run_raw_command(self, full_cmd: str) -> str:
+        """
+        Parses a raw string like 'set vpn...' or 'show interfaces'
+        and executes the appropriate API call.
+        """
+        parts = full_cmd.strip().split()
+        if not parts:
+            return "Error: Empty command"
+        
+        action = parts[0].toLowerCase()
+        remaining = parts[1:]
+
+        try:
+            if action == "show":
+                return await self.show_text(remaining)
+            
+            elif action == "set":
+                # For 'set', we need to distinguish between path and value.
+                # In VyOS REST, value is optional.
+                # Heuristic: try setting the whole thing as path first.
+                res = await self.set_config(remaining)
+                if res.get("success"):
+                    return "Success: Configuration set (Pending commit/save)"
+                return f"Error: {res.get('error')}"
+
+            elif action == "delete":
+                res = await self.delete_config(remaining)
+                if res.get("success"):
+                    return "Success: Configuration deleted (Pending commit/save)"
+                return f"Error: {res.get('error')}"
+
+            elif action == "commit":
+                res = await self.commit()
+                return "Success: Changes committed" if res.get("success") else f"Error: {res.get('error')}"
+
+            elif action == "save":
+                res = await self.save()
+                return "Success: Configuration saved" if res.get("success") else f"Error: {res.get('error')}"
+            
+            else:
+                # Fallback to operational 'run' for anything else (ping, monitor, etc.)
+                return await self.run_op(parts)
+
+        except Exception as e:
+            return f"Exception during execution: {str(e)}"
+
     # ── Configuration Management (Write) ─────────────────────────────────
 
     async def set_config(self, path: List[str], value: Any = None) -> Dict[str, Any]:

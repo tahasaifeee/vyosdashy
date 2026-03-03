@@ -258,14 +258,17 @@ export default function RouterDashboard() {
 
   const handleCommand = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!customCommand) return;
     setCommandLoading(true);
+    setCommandOutput(`vyos@router:~$ ${customCommand}\n\nRunning...`);
     try {
-      let parts = customCommand.trim().split(/\s+/);
-      if (parts[0].toLowerCase() === 'show') parts.shift();
-      const res = await api.post(`/routers/${id}/command`, { command: parts });
-      setCommandOutput(`vyos@router:~$ show ${parts.join(' ')}\n\n${res.data.output}`);
-    } catch (err: any) { setCommandOutput('Command failed.'); }
-    finally { setCommandLoading(false); }
+      const res = await api.post(`/routers/${id}/command`, { command: customCommand });
+      setCommandOutput(`vyos@router:~$ ${customCommand}\n\n${res.data.output || '(No output)'}`);
+    } catch (err: any) {
+      setCommandOutput(`Error: ${err.response?.data?.detail || err.message}`);
+    } finally {
+      setCommandLoading(false);
+    }
   };
 
   const toggleVpnService = async (service: string, currentState: boolean) => {
