@@ -11,3 +11,4 @@ httpx
 redis
 celery
 pyvyos
+requests
