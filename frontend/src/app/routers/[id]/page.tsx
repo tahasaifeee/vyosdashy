@@ -128,6 +128,9 @@ export default function RouterDashboard() {
   const [logs, setLogs] = useState<string[]>([]);
   const [conntrack, setConntrack] = useState<string>('');
   const [processes, setProcesses] = useState<string>('');
+  const [arpTable, setArpTable] = useState<string>('');
+  const [dhcpLeases, setDhcpLeases] = useState<string>('');
+  const [natTranslations, setNatTranslations] = useState<string>('');
   const [loadingTab, setLoadingTab] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
@@ -145,6 +148,11 @@ export default function RouterDashboard() {
   const [captureInterface, setCaptureInterface] = useState('');
   const [captureOutput, setCaptureOutput] = useState('');
   const [captureLoading, setCaptureLoading] = useState(false);
+
+  // Command Explorer State
+  const [customCommand, setCustomCommand] = useState('');
+  const [commandOutput, setCommandOutput] = useState('');
+  const [commandLoading, setCommandLoading] = useState(false);
 
   // Configuration State
   const [newTimezone, setNewTimezone] = useState('');
@@ -226,6 +234,15 @@ export default function RouterDashboard() {
       } else if (activeTab === 'top') {
         const res = await api.get(`/routers/${id}/top`);
         setProcesses(res.data.output || '');
+      } else if (activeTab === 'arp') {
+        const res = await api.post(`/routers/${id}/command`, { command: ["arp"] });
+        setArpTable(res.data.output || '');
+      } else if (activeTab === 'leases') {
+        const res = await api.post(`/routers/${id}/command`, { command: ["dhcp", "server", "leases"] });
+        setDhcpLeases(res.data.output || '');
+      } else if (activeTab === 'nat') {
+        const res = await api.post(`/routers/${id}/command`, { command: ["nat", "translations"] });
+        setNatTranslations(res.data.output || '');
       }
     } catch (err: any) {
       console.error('Failed to load tab data:', err.message || err);
@@ -291,6 +308,25 @@ export default function RouterDashboard() {
       setCaptureOutput(err.response?.data?.detail || 'Traffic capture failed.');
     } finally {
       setCaptureLoading(false);
+    }
+  };
+
+  const handleCommand = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customCommand) return;
+    setCommandLoading(true);
+    setCommandOutput(`vyos@router:~$ show ${customCommand}\n\nRunning...`);
+    try {
+      // Split command and remove 'show' if user added it
+      let parts = customCommand.trim().split(/\s+/);
+      if (parts[0].toLowerCase() === 'show') parts.shift();
+      
+      const res = await api.post(`/routers/${id}/command`, { command: parts });
+      setCommandOutput(`vyos@router:~$ show ${parts.join(' ')}\n\n${res.data.output || '(No output)'}`);
+    } catch (err: any) {
+      setCommandOutput(`Error: ${err.response?.data?.detail || err.message}`);
+    } finally {
+      setCommandLoading(false);
     }
   };
 
