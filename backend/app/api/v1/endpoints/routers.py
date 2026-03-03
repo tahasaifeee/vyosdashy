@@ -433,6 +433,44 @@ async def monitor_traffic_capture(
     output = await client.capture_traffic(interface)
     return {"output": output}
 
+@router.put("/{id}/config/vpn")
+async def update_vpn_service_config(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    id: int,
+    service: str = Body(...),
+    enabled: bool = Body(...),
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Enable or disable a VPN service.
+    Supported services: ipsec, l2tp, openconnect, pptp, sstp
+    """
+    result = await db.execute(select(Router).where(Router.id == id))
+    router_obj = result.scalars().first()
+    if not router_obj:
+        raise HTTPException(status_code=404, detail="Router not found")
+
+    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
+    
+    # Path construction
+    # Most VPN services in VyOS are at ['vpn', service]
+    # For remote-access types it might vary, but user provided completions were for 'set vpn ...'
+    path = ["vpn", service]
+    
+    if enabled:
+        # Just creating the node is often enough to 'enable' it with defaults
+        # or it might need specific sub-nodes. For a 'quick toggle', we try to set the base.
+        res = await client.set_config(path)
+    else:
+        res = await client.delete_config(path)
+
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error") or "Failed to update config")
+
+    await client.save()
+    return {"success": True}
+
 @router.delete("/{id}", response_model=RouterSchema)
 async def delete_router(
     *,

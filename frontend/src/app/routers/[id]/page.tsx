@@ -344,6 +344,18 @@ export default function RouterDashboard() {
     }
   };
 
+  const toggleVpnService = async (service: string, currentState: boolean) => {
+    setConfigLoading(true);
+    try {
+      await api.put(`/routers/${id}/config/vpn`, { service, enabled: !currentState });
+      fetchData();
+    } catch (err: any) {
+      alert(err.response?.data?.detail || `Failed to ${currentState ? 'disable' : 'enable'} ${service}.`);
+    } finally {
+      setConfigLoading(false);
+    }
+  };
+
   const configStatus = useMemo(() => {
     if (!routerConfig) return null;
     const bgpCfg = routerConfig.protocols?.bgp;
@@ -481,6 +493,18 @@ export default function RouterDashboard() {
                     icon={<Cpu className="w-4 h-4" />} 
                     label="Process Monitor" 
                   />
+                  <SidebarItem 
+                    active={activeTab === 'leases'} 
+                    onClick={() => setActiveTab('leases')} 
+                    icon={<HardDriveDownload className="w-4 h-4" />} 
+                    label="DHCP Leases" 
+                  />
+                  <SidebarItem 
+                    active={activeTab === 'nat'} 
+                    onClick={() => setActiveTab('nat')} 
+                    icon={<Globe2 className="w-4 h-4" />} 
+                    label="NAT Translations" 
+                  />
                 </div>
               </div>
 
@@ -493,6 +517,12 @@ export default function RouterDashboard() {
                     onClick={() => setActiveTab('routes')} 
                     icon={<Route className="w-4 h-4" />} 
                     label="Routing Table" 
+                  />
+                  <SidebarItem 
+                    active={activeTab === 'arp'} 
+                    onClick={() => setActiveTab('arp')} 
+                    icon={<List className="w-4 h-4" />} 
+                    label="ARP Table" 
                   />
                   <SidebarItem 
                     active={activeTab === 'interfaces'} 
@@ -575,6 +605,12 @@ export default function RouterDashboard() {
                     onClick={() => setActiveTab('traceroute')} 
                     icon={<Terminal className="w-4 h-4" />} 
                     label="Traceroute" 
+                  />
+                  <SidebarItem 
+                    active={activeTab === 'command'} 
+                    onClick={() => setActiveTab('command')} 
+                    icon={<TerminalSquare className="w-4 h-4" />} 
+                    label="Command Explorer" 
                   />
                 </div>
               </div>
@@ -776,12 +812,32 @@ export default function RouterDashboard() {
                             </div>
                           </div>
                           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative z-10">
-                            <ProtocolRow label="IPsec VPN" active={configStatus?.vpn?.ipsec} detail="Secure Tunnel" />
-                            <ProtocolRow label="L2TP Remote" active={configStatus?.vpn?.l2tp} detail="Client Access" />
-                            <ProtocolRow label="OpenConnect" active={configStatus?.vpn?.openconnect} detail="SSL VPN" />
-                            <ProtocolRow label="PPTP Server" active={configStatus?.vpn?.pptp} detail="Legacy Access" />
-                            <ProtocolRow label="SSTP Server" active={configStatus?.vpn?.sstp} detail="Windows VPN" />
-                            <ProtocolRow label="RSA Keys" active={configStatus?.vpn?.rsa} detail="Auth Assets" />
+                            {[
+                              { id: 'ipsec', label: 'IPsec VPN', detail: 'Secure Tunnel' },
+                              { id: 'l2tp', label: 'L2TP Remote', detail: 'Client Access' },
+                              { id: 'openconnect', label: 'OpenConnect', detail: 'SSL VPN' },
+                              { id: 'pptp', label: 'PPTP Server', detail: 'Legacy Access' },
+                              { id: 'sstp', label: 'SSTP Server', detail: 'Windows VPN' },
+                            ].map((svc) => (
+                              <div key={svc.id} className="flex flex-col gap-3 p-4 bg-white/50 dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/5">
+                                <ProtocolRow label={svc.label} active={(configStatus?.vpn as any)?.[svc.id]} detail={svc.detail} />
+                                <button 
+                                  onClick={() => toggleVpnService(svc.id, (configStatus?.vpn as any)?.[svc.id])}
+                                  disabled={configLoading}
+                                  className={`w-full py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
+                                    (configStatus?.vpn as any)?.[svc.id] 
+                                      ? 'bg-danger/10 text-danger hover:bg-danger hover:text-white' 
+                                      : 'bg-success/10 text-success hover:bg-success hover:text-white'
+                                  }`}
+                                >
+                                  {(configStatus?.vpn as any)?.[svc.id] ? 'Disable Service' : 'Enable Service'}
+                                </button>
+                              </div>
+                            ))}
+                            <div className="flex flex-col gap-3 p-4 bg-white/50 dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/5">
+                              <ProtocolRow label="RSA Keys" active={configStatus?.vpn?.rsa} detail="Auth Assets" />
+                              <div className="w-full py-2 text-center text-[9px] font-bold text-slate-400 uppercase tracking-widest">Read Only</div>
+                            </div>
                           </div>
                         </div>
                         
@@ -910,6 +966,42 @@ export default function RouterDashboard() {
                             <span>{log}</span>
                           </div>
                         ))}
+                      </div>
+                    )}
+                    {activeTab === 'arp' && (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between px-2">
+                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                            <Network className="w-3.5 h-3.5" /> Address Resolution Table
+                          </span>
+                        </div>
+                        <pre className="bg-slate-100 dark:bg-dark-900/50 p-8 rounded-3xl border border-slate-200 dark:border-white/5 font-mono text-[11px] text-slate-700 dark:text-slate-300 overflow-x-auto whitespace-pre shadow-inner custom-scrollbar min-h-[400px]">
+                          {arpTable || 'No ARP entries found.'}
+                        </pre>
+                      </div>
+                    )}
+                    {activeTab === 'leases' && (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between px-2">
+                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                            <HardDriveDownload className="w-3.5 h-3.5" /> Active DHCP Leases
+                          </span>
+                        </div>
+                        <pre className="bg-slate-100 dark:bg-dark-900/50 p-8 rounded-3xl border border-slate-200 dark:border-white/5 font-mono text-[11px] text-slate-700 dark:text-slate-300 overflow-x-auto whitespace-pre shadow-inner custom-scrollbar min-h-[400px]">
+                          {dhcpLeases || 'No active DHCP leases found.'}
+                        </pre>
+                      </div>
+                    )}
+                    {activeTab === 'nat' && (
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between px-2">
+                          <span className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-2">
+                            <Globe2 className="w-3.5 h-3.5" /> NAT Translation Table
+                          </span>
+                        </div>
+                        <pre className="bg-slate-100 dark:bg-dark-900/50 p-8 rounded-3xl border border-slate-200 dark:border-white/5 font-mono text-[11px] text-slate-700 dark:text-slate-300 overflow-x-auto whitespace-pre shadow-inner custom-scrollbar min-h-[400px]">
+                          {natTranslations || 'No NAT translations active.'}
+                        </pre>
                       </div>
                     )}
                     {activeTab === 'conntrack' && (
@@ -1057,6 +1149,38 @@ export default function RouterDashboard() {
                         <div className="bg-slate-100 dark:bg-dark-900/50 p-6 rounded-2xl border border-slate-200 dark:border-white/5 font-mono text-xs text-slate-700 dark:text-slate-300 min-h-[300px] whitespace-pre shadow-inner">
                           {tracerouteOutput || 'Enter a destination and click "Run Traceroute" to map the network path.'}
                         </div>
+                      </div>
+                    )}
+                    {activeTab === 'command' && (
+                      <div className="space-y-6">
+                        <div className="bg-primary/5 p-6 rounded-3xl border border-primary/10">
+                          <h4 className="text-sm font-black text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
+                            <TerminalSquare className="w-4 h-4" /> Interactive Command Explorer
+                          </h4>
+                          <form onSubmit={handleCommand} className="flex flex-col sm:flex-row gap-4">
+                            <div className="flex-1 relative">
+                              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-primary font-bold text-sm">show</span>
+                              <input 
+                                required
+                                className="w-full bg-white dark:bg-dark-900 border border-slate-200 dark:border-white/10 rounded-xl py-3 pl-14 pr-4 outline-none focus:ring-2 focus:ring-primary transition-all text-sm font-mono"
+                                placeholder="interfaces, bgp summary, ip route..."
+                                value={customCommand}
+                                onChange={(e) => setCustomCommand(e.target.value)}
+                              />
+                            </div>
+                            <button 
+                              type="submit" 
+                              disabled={commandLoading}
+                              className="btn-primary px-8 flex items-center justify-center gap-2"
+                            >
+                              {commandLoading ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Play className="w-4 h-4" />}
+                              Execute
+                            </button>
+                          </form>
+                        </div>
+                        <pre className="bg-slate-900 text-slate-300 p-8 rounded-3xl border border-white/5 font-mono text-[11px] overflow-x-auto whitespace-pre shadow-2xl custom-scrollbar min-h-[500px]">
+                          {commandOutput || 'Type a show command (e.g., "interfaces" or "version") and press Execute to explore the router state.'}
+                        </pre>
                       </div>
                     )}
                     {activeTab === 'settings' && (

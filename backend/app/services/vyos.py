@@ -224,17 +224,6 @@ class VyOSClient:
             return None
         return result.get("data", {}).get("ShowIpRoute", {}).get("result")
 
-    async def get_legacy_interface_status(self) -> Optional[Dict[str, Any]]:
-        """Fetch interface status via 'show interfaces' text if REST fails."""
-        try:
-            res = await self.show_text(["interfaces"])
-            if res and not res.startswith("Error:"):
-                # Basic parsing could be added here if needed
-                # For now we'll rely on get_config(["interfaces"]) which is standard REST
-                pass
-        except: pass
-        return None
-
     async def get_system_logs(self) -> Optional[List[str]]:
         res = await self.show_text(["log"])
         if res.startswith("Error:"): return None
@@ -255,44 +244,27 @@ class VyOSClient:
         return await self.show_text(["traceroute", host])
 
     async def capture_traffic(self, interface: str, count: int = 50) -> str:
-        """
-        Capture a burst of traffic. 
-        Note: We use 'monitor traffic' but it can be tricky via API.
-        A better way is often 'show log' or specific 'show' commands 
-        if we want formatted output.
-        """
         return await self.show_text(["monitor", "traffic", interface, "unlimited"])
 
     async def run_op(self, cmd_parts: List[str]) -> str:
         """
         Run an arbitrary operational command.
-        Example: cmd_parts=["show", "system", "processes"]
         """
         try:
-            payload = {
-                "op": "run",
-                "path": cmd_parts
-            }
-            async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
-                response = await client.post(
-                    f"{self.base_url}/run",
-                    data={"data": json.dumps(payload), "key": self.api_key}
-                )
-                if response.status_code == 200:
-                    res_json = response.json()
-                    if res_json.get("success"):
-                        return res_json.get("data", "")
-                    return f"Error: {res_json.get('error')}"
-                return f"HTTP Error: {response.status_code}"
+            response = await asyncio.to_thread(self.device.run, cmd_parts)
+            if response.error:
+                return f"Error: {response.error}"
+            return str(response.result)
         except Exception as e:
             return f"Exception: {str(e)}"
 
     # ── Configuration Management (Write) ─────────────────────────────────
 
-    async def set_config(self, path: List[str]) -> Dict[str, Any]:
-        """Write configuration using pyvyos VyDevice."""
+    async def set_config(self, path: List[str], value: Any = None) -> Dict[str, Any]:
+        """Set configuration using pyvyos VyDevice."""
         try:
-            response = await asyncio.to_thread(self.device.configure_set, path)
+            # configure_set takes path as list and value as optional string
+            response = await asyncio.to_thread(self.device.configure_set, path, str(value) if value is not None else None)
             if response.error:
                 return {"success": False, "error": response.error}
             return {"success": True}
@@ -310,7 +282,10 @@ class VyOSClient:
             return {"success": False, "error": str(e)}
 
     async def commit(self) -> Dict[str, Any]:
-        """VyDevice doesn't have a separate commit; it uses set/delete directly."""
+        """
+        pyvyos automatically commits when calling configure_set/delete.
+        This method is kept for compatibility with the flow.
+        """
         return {"success": True}
 
     async def save(self) -> Dict[str, Any]:
