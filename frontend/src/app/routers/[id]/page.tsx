@@ -115,6 +115,8 @@ export default function RouterDashboard() {
   const [snmpConfig, setSnmpConfig] = useState<any>({});
   const [ipsecStatus, setIpsecStatus] = useState<string>('');
   const [ipsecConfig, setIpsecConfig] = useState<any>({});
+  const [ocStatus, setOcStatus] = useState<string>('');
+  const [ocConfig, setOcConfig] = useState<any>({});
   const [loadingTab, setLoadingTab] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
@@ -124,28 +126,110 @@ export default function RouterDashboard() {
     peerName: '',
     remoteAddr: '',
     localAddr: '',
+    localID: '',
+    remoteID: '',
     presharedKey: '',
-    localPrefix: '192.168.1.0/24',
-    remotePrefix: ''
+    localPrefix: '192.168.0.0/24',
+    remotePrefix: '192.168.1.0/24',
+    ikeGroup: 'IKE-GROUP',
+    espGroup: 'ESP-GROUP',
+    interface: 'eth0'
   });
+
+  const [showOcForm, setShowOcForm] = useState(false);
+  const [ocForm, setOcForm] = useState({
+    subnet: '172.20.20.0/24',
+    dns: '8.8.8.8',
+    caCert: 'ca-ocserv',
+    serverCert: 'srv-ocserv',
+    authMode: 'local password'
+  });
+
+  const handleSaveOpenConnect = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setConfigLoading(true);
+    try {
+      const commands = [
+        { path: ['vpn', 'openconnect', 'authentication', 'mode'], value: ocForm.authMode },
+        { path: ['vpn', 'openconnect', 'network-settings', 'client-ip-settings', 'subnet'], value: ocForm.subnet },
+        { path: ['vpn', 'openconnect', 'network-settings', 'name-server'], value: ocForm.dns },
+        { path: ['vpn', 'openconnect', 'ssl', 'ca-certificate'], value: ocForm.caCert },
+        { path: ['vpn', 'openconnect', 'ssl', 'certificate'], value: ocForm.serverCert },
+      ];
+      await api.post(`/routers/${id}/config/batch`, commands);
+      setShowOcForm(false);
+      fetchData();
+    } catch (err: any) {
+      alert('Failed to save OpenConnect config: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setConfigLoading(false);
+    }
+  };
 
   const handleSaveIPsecPeer = async (e: React.FormEvent) => {
     e.preventDefault();
     setConfigLoading(true);
     try {
       const commands = [
-        { path: ['vpn', 'ipsec', 'site-to-site', 'peer', ipsecForm.peerName, 'authentication', 'mode'], value: 'pre-shared-secret' },
-        { path: ['vpn', 'ipsec', 'site-to-site', 'peer', ipsecForm.peerName, 'authentication', 'pre-shared-secret'], value: ipsecForm.presharedKey },
-        { path: ['vpn', 'ipsec', 'site-to-site', 'peer', ipsecForm.peerName, 'local-address'], value: ipsecForm.localAddr },
-        { path: ['vpn', 'ipsec', 'site-to-site', 'peer', ipsecForm.peerName, 'remote-address'], value: ipsecForm.remoteAddr },
-        { path: ['vpn', 'ipsec', 'site-to-site', 'peer', ipsecForm.peerName, 'tunnel', '0', 'local', 'prefix'], value: ipsecForm.localPrefix },
-        { path: ['vpn', 'ipsec', 'site-to-site', 'peer', ipsecForm.peerName, 'tunnel', '0', 'remote', 'prefix'], value: ipsecForm.remotePrefix },
+        // 1. IKE Group Definition
+        { path: ['vpn', 'ipsec', 'ike-group', ipsecForm.ikeGroup, 'key-exchange'], value: 'ikev1' },
+        { path: ['vpn', 'ipsec', 'ike-group', ipsecForm.ikeGroup, 'lifetime'], value: '28800' },
+        { path: ['vpn', 'ipsec', 'ike-group', ipsecForm.ikeGroup, 'proposal', '10', 'encryption'], value: 'aes256' },
+        { path: ['vpn', 'ipsec', 'ike-group', ipsecForm.ikeGroup, 'proposal', '10', 'hash'], value: 'sha1' },
+        { path: ['vpn', 'ipsec', 'ike-group', ipsecForm.ikeGroup, 'proposal', '10', 'dh-group'], value: '14' },
+        { path: ['vpn', 'ipsec', 'ike-group', ipsecForm.ikeGroup, 'dead-peer-detection', 'action'], value: 'restart' },
+        { path: ['vpn', 'ipsec', 'ike-group', ipsecForm.ikeGroup, 'dead-peer-detection', 'interval'], value: '30' },
+        { path: ['vpn', 'ipsec', 'ike-group', ipsecForm.ikeGroup, 'dead-peer-detection', 'timeout'], value: '120' },
+
+        // 2. ESP Group Definition
+        { path: ['vpn', 'ipsec', 'esp-group', ipsecForm.espGroup, 'lifetime'], value: '3600' },
+        { path: ['vpn', 'ipsec', 'esp-group', ipsecForm.espGroup, 'proposal', '10', 'encryption'], value: 'aes256' },
+        { path: ['vpn', 'ipsec', 'esp-group', ipsecForm.espGroup, 'proposal', '10', 'hash'], value: 'sha1' },
+
+        // 3. Global Interface
+        { path: ['vpn', 'ipsec', 'interface'], value: ipsecForm.interface },
+
+        // 4. PSK Authentication
+        { path: ['vpn', 'ipsec', 'authentication', 'psk', ipsecForm.peerName, 'id'], value: ipsecForm.localID || ipsecForm.localAddr },
+        { path: ['vpn', 'ipsec', 'authentication', 'psk', ipsecForm.peerName, 'id'], value: ipsecForm.remoteID || ipsecForm.remoteAddr },
+        { path: ['vpn', 'ipsec', 'authentication', 'psk', ipsecForm.peerName, 'secret'], value: ipsecForm.presharedKey },
+
+        // 5. Site-to-Site Peer
+        { path: ['vpn', 'ipsec', 'site-to-site', 'peer', ipsecForm.remoteAddr, 'authentication', 'mode'], value: 'pre-shared-secret' },
+        { path: ['vpn', 'ipsec', 'site-to-site', 'peer', ipsecForm.remoteAddr, 'authentication', 'local-id'], value: ipsecForm.localID || ipsecForm.localAddr },
+        { path: ['vpn', 'ipsec', 'site-to-site', 'peer', ipsecForm.remoteAddr, 'authentication', 'remote-id'], value: ipsecForm.remoteID || ipsecForm.remoteAddr },
+        { path: ['vpn', 'ipsec', 'site-to-site', 'peer', ipsecForm.remoteAddr, 'ike-group'], value: ipsecForm.ikeGroup },
+        { path: ['vpn', 'ipsec', 'site-to-site', 'peer', ipsecForm.remoteAddr, 'default-esp-group'], value: ipsecForm.espGroup },
+        { path: ['vpn', 'ipsec', 'site-to-site', 'peer', ipsecForm.remoteAddr, 'local-address'], value: ipsecForm.localAddr },
+        { path: ['vpn', 'ipsec', 'site-to-site', 'peer', ipsecForm.remoteAddr, 'remote-address'], value: ipsecForm.remoteAddr },
+        { path: ['vpn', 'ipsec', 'site-to-site', 'peer', ipsecForm.remoteAddr, 'connection-type'], value: 'initiate' },
+        
+        // 6. Tunnel 0
+        { path: ['vpn', 'ipsec', 'site-to-site', 'peer', ipsecForm.remoteAddr, 'tunnel', '0', 'local', 'prefix'], value: ipsecForm.localPrefix },
+        { path: ['vpn', 'ipsec', 'site-to-site', 'peer', ipsecForm.remoteAddr, 'tunnel', '0', 'remote', 'prefix'], value: ipsecForm.remotePrefix },
       ];
       await api.post(`/routers/${id}/config/batch`, commands);
       setShowIpsecForm(false);
       fetchData();
     } catch (err: any) {
       alert('Failed to save IPsec peer: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setConfigLoading(false);
+    }
+  };
+
+  const handleRemoveIPsecPeer = async (remoteAddr: string, peerName: string) => {
+    if (!confirm(`Delete tunnel to ${remoteAddr}?`)) return;
+    setConfigLoading(true);
+    try {
+      const commands = [
+        { op: 'delete', path: ['vpn', 'ipsec', 'site-to-site', 'peer', remoteAddr] },
+        { op: 'delete', path: ['vpn', 'ipsec', 'authentication', 'psk', peerName] }
+      ];
+      await api.post(`/routers/${id}/config/batch`, commands);
+      fetchData();
+    } catch (err: any) {
+      alert('Failed to remove peer.');
     } finally {
       setConfigLoading(false);
     }

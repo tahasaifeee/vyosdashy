@@ -319,6 +319,36 @@ async def get_vpn_ipsec_config(
     config = await client.get_vpn_ipsec_config()
     return config
 
+@router.get("/{id}/vpn/openconnect/status")
+async def get_vpn_openconnect_status(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    id: int,
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    result = await db.execute(select(Router).where(Router.id == id))
+    router_obj = result.scalars().first()
+    if not router_obj:
+        raise HTTPException(status_code=404, detail="Router not found")
+    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
+    status = await client.get_vpn_openconnect_status()
+    return {"status": status}
+
+@router.get("/{id}/vpn/openconnect/config")
+async def get_vpn_openconnect_config(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    id: int,
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    result = await db.execute(select(Router).where(Router.id == id))
+    router_obj = result.scalars().first()
+    if not router_obj:
+        raise HTTPException(status_code=404, detail="Router not found")
+    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
+    config = await client.get_vpn_openconnect_config()
+    return config
+
 @router.post("/{id}/static-routes")
 async def add_static_route(
     *,

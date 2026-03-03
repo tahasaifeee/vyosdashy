@@ -253,6 +253,13 @@ class VyOSClient:
         res = await self.get_config(["vpn", "ipsec"])
         return res.get("data", {})
 
+    async def get_vpn_openconnect_status(self) -> str:
+        return await self.show_text(["openconnect-server", "sessions"])
+
+    async def get_vpn_openconnect_config(self) -> Dict[str, Any]:
+        res = await self.get_config(["vpn", "openconnect"])
+        return res.get("data", {})
+
     async def run_op(self, cmd_parts: List[str]) -> str:
         """
         Run an arbitrary operational command.
