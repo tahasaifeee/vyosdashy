@@ -29,7 +29,9 @@ export default function Navbar() {
       setAlerts(alertsRes.data);
       setUnreadCount(countRes.data.count);
       setCurrentUser(userRes.data);
-    } catch (err) {}
+    } catch (err: any) {
+      console.error('Navbar fetchData failed:', err.message || err);
+    }
   };
 
   useEffect(() => {
@@ -48,14 +50,18 @@ export default function Navbar() {
       await api.post('/alerts/mark-all-read');
       setUnreadCount(0);
       fetchAlerts();
-    } catch (err) {}
+    } catch (err: any) {
+      console.error('Failed to mark alerts as read:', err.message || err);
+    }
   };
 
   const fetchAlerts = async () => {
     try {
       const res = await api.get('/alerts/?limit=5');
       setAlerts(res.data);
-    } catch (err) {}
+    } catch (err: any) {
+      console.error('Failed to fetch alerts:', err.message || err);
+    }
   };
 
   return (
