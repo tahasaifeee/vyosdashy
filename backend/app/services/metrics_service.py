@@ -149,11 +149,21 @@ class MetricsService:
                     if res_if.get("success") and res_if.get("data"):
                         iface_data = res_if.get("data", {})
                     
-                    # If config is empty, try to get at least names via show
+                    # If config is empty or failed, try to get names via legacy show
                     if not iface_data:
                         iface_text = await client.get_legacy_interface_stats()
-                        # Very basic check: if we got text, we know interfaces exist
-                        # The UI prefers the structured data from get_interface_config
+                        # Simple parsing to identify categories (ethernet, etc.)
+                        # Usually format is: Interface  IP Address  S/L  Description
+                        for line in iface_text.splitlines():
+                            if not line or line.startswith(("Interface", "---------")): continue
+                            parts = line.split()
+                            if len(parts) >= 1:
+                                ifname = parts[0]
+                                iftype = "ethernet" if ifname.startswith("eth") else \
+                                         "loopback" if ifname.startswith("lo") else \
+                                         "vlan" if "." in ifname or ifname.startswith("vlan") else "other"
+                                if iftype not in iface_data: iface_data[iftype] = {}
+                                iface_data[iftype][ifname] = {"address": parts[1] if len(parts) > 1 else "N/A"}
                 except: pass
 
                 try:
@@ -227,12 +237,22 @@ class MetricsService:
                 if isinstance(counters, list):
                     for c in counters:
                         ifname = c.get("ifname")
+                        found = False
                         for _, ifaces in iface_data.items():
                             if isinstance(ifaces, dict) and ifname in ifaces:
                                 ifaces[ifname].update({
                                     "rx-bytes": c.get("rx_bytes", 0), "tx-bytes": c.get("tx_bytes", 0),
                                     "rx-packets": c.get("rx_packets", 0), "tx-packets": c.get("tx_packets", 0)
                                 })
+                                found = True
+                        
+                        # If interface wasn't in config but has counters, add it to 'other'
+                        if not found:
+                            if "other" not in iface_data: iface_data["other"] = {}
+                            iface_data["other"][ifname] = {
+                                "rx-bytes": c.get("rx_bytes", 0), "tx-bytes": c.get("tx_bytes", 0),
+                                "rx-packets": c.get("rx_packets", 0), "tx-packets": c.get("tx_packets", 0)
+                            }
 
                 metrics = RouterMetrics(
                     router_id=router.id,

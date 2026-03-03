@@ -1,11 +1,19 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 export function useCountUp(end: number, duration: number = 1000) {
-  const [count, setCount] = useState(0);
+  const [count, setCount] = useState(end);
+  const prevEndRef = useRef(end);
+  const startValRef = useRef(end);
 
   useEffect(() => {
     let startTime: number | null = null;
     let animationFrame: number;
+    
+    const startValue = startValRef.current;
+    const endValue = end;
+    const diff = endValue - startValue;
+    
+    if (diff === 0) return;
 
     const animate = (timestamp: number) => {
       if (!startTime) startTime = timestamp;
@@ -15,19 +23,29 @@ export function useCountUp(end: number, duration: number = 1000) {
       // Easing function: easeOutQuart
       const easeOut = 1 - Math.pow(1 - percentage, 4);
       
-      setCount(end * easeOut);
+      const currentCount = startValue + (diff * easeOut);
+      setCount(currentCount);
 
       if (progress < duration) {
         animationFrame = requestAnimationFrame(animate);
       } else {
-        setCount(end);
+        setCount(endValue);
+        startValRef.current = endValue;
       }
     };
 
     animationFrame = requestAnimationFrame(animate);
 
-    return () => cancelAnimationFrame(animationFrame);
+    return () => {
+      cancelAnimationFrame(animationFrame);
+      startValRef.current = count; // Save current progress if interrupted
+    };
   }, [end, duration]);
+
+  // Handle immediate initialization/reset if needed
+  useEffect(() => {
+    prevEndRef.current = end;
+  }, [end]);
 
   return count;
 }

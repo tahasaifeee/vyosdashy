@@ -44,8 +44,11 @@ function sumIfaceBytes(interfaces: any) {
 
   const root = getIfaceRoot(interfaces);
   // Iterate through categories (ethernet, loopback, etc.)
-  Object.values(root).forEach((category: any) => {
+  Object.entries(root).forEach(([categoryName, category]: [string, any]) => {
     if (!category || typeof category !== 'object') return;
+    // Skip loopback to avoid internal traffic skews
+    if (categoryName.toLowerCase() === 'loopback') return;
+    
     // Iterate through individual interfaces (eth0, eth1, etc.)
     Object.values(category).forEach((iface: any) => {
       if (!iface || typeof iface !== 'object') return;
@@ -56,8 +59,9 @@ function sumIfaceBytes(interfaces: any) {
 
   // Fallback for flat structures
   if (rx === 0 && tx === 0) {
-    Object.values(interfaces).forEach((iface: any) => {
+    Object.entries(interfaces).forEach(([name, iface]: [string, any]) => {
       if (iface && typeof iface === 'object' && (iface['rx-bytes'] || iface['tx-bytes'])) {
+        if (name.toLowerCase() === 'lo' || name.toLowerCase().startsWith('loopback')) return;
         rx += getIfaceRx(iface);
         tx += getIfaceTx(iface);
       }
@@ -168,7 +172,6 @@ export default function RouterDashboard() {
       setLastUpdated(new Date());
 
       if (Array.isArray(historyRes.data)) {
-        const POLL = 30;
         const rawPoints = historyRes.data.map((m: any) => {
           const { rx, tx } = sumIfaceBytes(m.interfaces);
           return { timestamp: new Date(m.timestamp), rx, tx };
@@ -178,11 +181,15 @@ export default function RouterDashboard() {
         for (let i = 1; i < rawPoints.length; i++) {
           const prev = rawPoints[i - 1];
           const curr = rawPoints[i];
-          processed.push({
-            time: curr.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            rx: Math.round(Math.max(0, curr.rx - prev.rx) / POLL / 1024 / 1024 * 8 * 100) / 100,
-            tx: Math.round(Math.max(0, curr.tx - prev.tx) / POLL / 1024 / 1024 * 8 * 100) / 100,
-          });
+          const deltaSeconds = (curr.timestamp.getTime() - prev.timestamp.getTime()) / 1000;
+          
+          if (deltaSeconds > 0) {
+            processed.push({
+              time: curr.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              rx: Math.round(Math.max(0, curr.rx - prev.rx) / deltaSeconds / 1000 / 1000 * 8 * 100) / 100,
+              tx: Math.round(Math.max(0, curr.tx - prev.tx) / deltaSeconds / 1000 / 1000 * 8 * 100) / 100,
+            });
+          }
         }
         setMetrics(processed);
       }
