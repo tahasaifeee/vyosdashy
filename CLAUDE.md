@@ -49,7 +49,7 @@ docker exec -i <backend-container> python app/create_first_user.py admin@example
 ## Architecture
 
 ### Backend (`backend/app/`)
-- `main.py` — FastAPI entry point. Lifespan creates all DB tables via `Base.metadata.create_all` (no Alembic), starts the 30s metrics polling loop, and wires CORS from `settings.BACKEND_CORS_ORIGINS` (falls back to `["*"]` if empty).
+- `main.py` — FastAPI entry point. Lifespan runs `Base.metadata.create_all`, then executes inline `ALTER TABLE` SQL to add columns (`load_average`, `active_sessions`, `uptime`, `disk_usage`) that were added after initial schema creation. Also exposes `GET /health` (`{"status": "ok"}`) and `GET /info` (VyOS-spec info endpoint with `version`/`hostname` query params). CORS falls back to `["*"]` if `BACKEND_CORS_ORIGINS` is empty.
 - `core/config.py` — Pydantic `Settings`. `SECRET_KEY` has **no default** — app crashes at startup if missing. `BACKEND_CORS_ORIGINS` is `List[str]` (plain strings, not `AnyHttpUrl`) to prevent Pydantic v2 from normalizing URLs and adding trailing slashes that break CORS matching.
 - `core/security.py` — JWT (HS256) creation/verification and bcrypt password hashing. Tokens expire in 60 minutes. Uses `datetime.now(timezone.utc)` (not deprecated `utcnow()`).
 - `api/deps.py` — `get_current_user` decodes JWT, handles `TypeError`/`ValueError` on bad `sub` claim, returns 403 (not 500) on invalid tokens. `get_current_active_superuser` for admin-only endpoints.
@@ -57,8 +57,9 @@ docker exec -i <backend-container> python app/create_first_user.py admin@example
 - `api/v1/endpoints/users.py` — `POST /` requires superuser. `GET /me` is `async def`.
 - `api/v1/endpoints/routers.py` — Router CRUD. On create, triggers immediate metrics collection via FastAPI `BackgroundTasks` (not `asyncio.create_task`).
 - `api/v1/endpoints/metrics.py` — `limit` is capped at 1000 via `Query(ge=1, le=1000)`. Both endpoints validate `router_id` existence (404 if not found).
-- `services/vyos.py` — `VyOSClient`. All calls use `verify=False` (self-signed certs on VyOS). Auth is a `key` form field, not a header. Always call `commit()` + `save()` after writes.
-- `services/metrics_service.py` — `collect_all_metrics()` fetches router IDs then fans out to `collect_metrics_by_id()` in parallel. Each call opens its own `AsyncSessionLocal` session. Runs every 30s via `run_metrics_collector()`.
+- `api/v1/endpoints/alerts.py` — Alerts CRUD: list (paginated, newest-first), unread count, mark-all-read. Alerts are auto-created by `metrics_service.py` on status changes—there is no manual alert creation endpoint.
+- `services/vyos.py` — `VyOSClient` wraps the `pyvyos` library (`VyDevice`). All sync `pyvyos` calls are wrapped in `asyncio.to_thread()` to avoid blocking the event loop. `commit()` is a no-op (pyvyos applies set/delete atomically); `save()` calls `device.config_file_save()`. For metrics, GraphQL (`/graphql`) is tried first (VyOS 1.4+ only), with legacy `show` text commands as fallback for older routers. `verify=False` for all requests.
+- `services/metrics_service.py` — `collect_all_metrics()` iterates enabled routers sequentially (not truly parallel). `collect_metrics_by_id()` opens its own `AsyncSessionLocal`. On status change (excluding initial `UNKNOWN→*`), inserts an `Alert`. Metrics loop starts via `asyncio.create_task()` in lifespan with a 10s initial delay.
 
 ### Frontend (`frontend/src/`)
 - `lib/api.ts` — Axios instance. Reads `NEXT_PUBLIC_API_URL` env var, falls back to `window.location.hostname:8000`. JWT injected from `localStorage` on every request via interceptor. **All API calls must use this instance.**
@@ -74,10 +75,14 @@ docker exec -i <backend-container> python app/create_first_user.py admin@example
 5. Background `metrics_service.py` polls every enabled router every 30s → updates `Router.status` + inserts `RouterMetrics` rows
 
 ### VyOS API Pattern
-- `POST /retrieve` — `{"op": "showConfig"/"show", "path": [...]}` for reads
-- `POST /configure` — `{"op": "set"/"delete", "path": [...]}` for writes
-- `POST /commit` then `POST /save` — **always required after writes** to persist on router
-- Auth via `key` form field (not a header)
+VyOS clients interact via `pyvyos.VyDevice`. Use `asyncio.to_thread()` for all synchronous pyvyos calls:
+- `device.retrieve_show_config(path)` — read config tree
+- `device.show(path)` — operational data (returns text)
+- `device.configure_set(path)` / `device.configure_delete(path)` — write; pyvyos commits atomically, no separate commit step needed
+- `device.config_file_save()` — persist to disk; **required after any write**
+- `/graphql` — used directly via httpx for `ShowInterfaceCounters`, `ShowSystemInformation`, `ShowIpRoute` (VyOS 1.4+ only). Falls back to `show_text()` for older routers.
+- `GET /info?version=true&hostname=true` — managed via httpx directly (not in pyvyos)
+- All connections use `verify=False` (self-signed certs)
 
 ## Environment Variables
 
@@ -104,7 +109,7 @@ NEXT_PUBLIC_API_URL=http://<server-ip>:8000
 ## Key Conventions
 
 - **Async everywhere**: All DB and I/O in `async/await`. No blocking calls in route handlers or services.
-- **No Alembic**: Schema managed by `create_all` on startup. Drop and recreate tables for schema changes in dev.
+- **No Alembic**: Schema managed by `create_all` on startup, with inline `ALTER TABLE IF NOT EXISTS` in the lifespan for additive column changes. Drop and recreate tables for non-additive schema changes in dev.
 - **VyOS writes**: Always `commit()` + `save()` after `set_config()` / `delete_config()`.
 - **Router status**: After any connectivity test, update `router.status` (`online`/`offline`/`unknown`) and `router.last_seen` with `datetime.now(timezone.utc)`.
 - **API keys**: Stored in plaintext in `routers.api_key` — encryption is a TODO.
