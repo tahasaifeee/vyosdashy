@@ -1,15 +1,20 @@
 import asyncio
+import datetime
 from typing import Any, List
+from datetime import timezone
 
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, status, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
+from pydantic import ValidationError
 
 from app.api import deps
-from app.models.router import Router
+from app.models.router import Router, RouterStatus
 from app.models.user import User
 from app.schemas.router import Router as RouterSchema, RouterCreate, RouterUpdate
 from app.services.vyos import VyOSClient
+from app.main import InfoQueryParams
 
 router = APIRouter()
 
@@ -112,9 +117,6 @@ async def test_router_connection(
     )
     is_online = test_res.get("success") is True
 
-    from app.models.router import RouterStatus
-    from datetime import timezone
-    import datetime
     router.status = RouterStatus.ONLINE if is_online else RouterStatus.OFFLINE
     router.last_seen = datetime.datetime.now(timezone.utc)
     if info_res.get("success") and info_res.get("data"):
@@ -174,11 +176,6 @@ async def get_router_config(
         "db_router": router_obj # Pass the refreshed router object
     }
 
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, status, Request
-from fastapi.responses import JSONResponse
-from pydantic import ValidationError
-from app.main import InfoQueryParams
-
 @router.get("/{id}/info")
 async def get_router_info_proxy(
     request: Request,
@@ -210,7 +207,6 @@ async def get_router_info_proxy(
         return JSONResponse(status_code=400, content={"success": False, "error": error_msg, "data": None})
 
 @router.get("/{id}/routes")
-
 async def get_router_routes(
     *,
     db: AsyncSession = Depends(deps.get_db),
@@ -317,7 +313,6 @@ async def update_router_timezone(
     return {"success": True, "message": f"Timezone updated to {timezone}"}
 
 @router.delete("/{id}", response_model=RouterSchema)
-
 async def delete_router(
     *,
     db: AsyncSession = Depends(deps.get_db),

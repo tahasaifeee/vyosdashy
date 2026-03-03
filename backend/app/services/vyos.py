@@ -27,24 +27,6 @@ class VyOSClient:
 
     # ── Low-level request helpers ──────────────────────────────────────────────
 
-    async def _post_form(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """
-        Legacy POST helper. 
-        Note: pyvyos handles most of these now via specific methods.
-        """
-        url = f"{self.base_url}/{endpoint}"
-        payload = {
-            "key": self.api_key,
-            "data": json.dumps(data),
-        }
-        try:
-            async with httpx.AsyncClient(verify=self.verify, timeout=10.0) as client:
-                response = await client.post(url, data=payload)
-                response.raise_for_status()
-                return response.json()
-        except Exception as e:
-            return {"success": False, "error": str(e)}
-
     async def _graphql(self, query: str) -> Dict[str, Any]:
         """POST a GraphQL query to /graphql (VyOS 1.4+)."""
         try:
