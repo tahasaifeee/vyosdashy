@@ -504,28 +504,28 @@ export default function RouterDashboard() {
               <div className="animate-in fade-in duration-500">
                 {/* ── Summary Bar ── */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-                  <SummaryCard 
-                    label="Compute Load" 
-                    value={<AnimatedNumber value={latest?.cpu_usage || 0} format={v => `${v}%`} />} 
-                    subValue={`Load: ${latest?.load_average?.['1m'] || 0}`}
+                  <SummaryCard
+                    label="Compute Load"
+                    value={<AnimatedNumber value={latest?.cpu_usage ?? 0} format={v => `${v.toFixed(2)}`} />}
+                    subValue={`1m ${(latest?.load_average?.['1m'] ?? 0).toFixed(2)}  5m ${(latest?.load_average?.['5m'] ?? 0).toFixed(2)}  15m ${(latest?.load_average?.['15m'] ?? 0).toFixed(2)}`}
                     icon={<Cpu className="w-5 h-5" />}
-                    progress={latest?.cpu_usage || 0}
+                    progress={Math.min(100, (latest?.cpu_usage ?? 0) * 20)}
                     color="primary"
                   />
-                  <SummaryCard 
-                    label="Memory Usage" 
-                    value={<AnimatedNumber value={latest?.memory_usage || 0} format={v => `${v}%`} />} 
+                  <SummaryCard
+                    label="Memory Usage"
+                    value={<AnimatedNumber value={latest?.memory_usage ?? 0} format={v => `${v.toFixed(1)}%`} />}
                     subValue="System RAM"
                     icon={<Activity className="w-5 h-5" />}
-                    progress={latest?.memory_usage || 0}
+                    progress={Math.min(100, latest?.memory_usage ?? 0)}
                     color="success"
                   />
-                  <SummaryCard 
-                    label="Disk Storage" 
-                    value={<AnimatedNumber value={latest?.disk_usage || 0} format={v => `${v}%`} />} 
+                  <SummaryCard
+                    label="Disk Storage"
+                    value={<AnimatedNumber value={latest?.disk_usage ?? 0} format={v => `${v.toFixed(1)}%`} />}
                     subValue="Root Partition"
                     icon={<HardDrive className="w-5 h-5" />}
-                    progress={latest?.disk_usage || 0}
+                    progress={Math.min(100, latest?.disk_usage ?? 0)}
                     color="info"
                   />
                   <SummaryCard 
