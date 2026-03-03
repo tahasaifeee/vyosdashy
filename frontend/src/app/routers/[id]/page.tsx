@@ -371,14 +371,14 @@ export default function RouterDashboard() {
                     label="Routing Table" 
                   />
                   <SidebarItem 
-                    active={false} 
-                    onClick={() => {}} 
+                    active={activeTab === 'interfaces'} 
+                    onClick={() => setActiveTab('interfaces')} 
                     icon={<Network className="w-4 h-4" />} 
                     label="Interfaces" 
                   />
                   <SidebarItem 
-                    active={false} 
-                    onClick={() => {}} 
+                    active={activeTab === 'bgp'} 
+                    onClick={() => setActiveTab('bgp')} 
                     icon={<GitBranch className="w-4 h-4" />} 
                     label="BGP Peers" 
                   />
@@ -628,6 +628,76 @@ export default function RouterDashboard() {
                   </div>
                 ) : (
                   <div className="mt-6 animate-in fade-in duration-500">
+                    {activeTab === 'bgp' && (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                          <thead>
+                            <tr className="text-[10px] text-slate-500 uppercase font-black tracking-widest border-b border-slate-200 dark:border-white/5">
+                              <th className="pb-4">Neighbor</th>
+                              <th className="pb-4">Remote AS</th>
+                              <th className="pb-4">State</th>
+                              <th className="pb-4">Uptime</th>
+                              <th className="pb-4">Prefixes</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(() => {
+                              const neighbors = extractBgpNeighbors(routerConfig);
+                              if (!neighbors) return <tr><td colSpan={5} className="py-10 text-center text-slate-500 font-bold uppercase tracking-widest text-xs">No BGP neighbors configured</td></tr>;
+                              return Object.entries(neighbors).map(([peer, data]: any, i) => (
+                                <tr key={i} className="border-b border-slate-100 dark:border-white/5 last:border-0 text-sm font-medium hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                                  <td className="py-4 font-mono text-primary font-black">{peer}</td>
+                                  <td className="py-4 font-bold text-slate-900 dark:text-slate-200">{data?.['remote-as'] || '—'}</td>
+                                  <td className="py-4">
+                                    <div className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-primary/10 text-primary text-[10px] font-black uppercase">
+                                      Configured
+                                    </div>
+                                  </td>
+                                  <td className="py-4 text-slate-500">N/A</td>
+                                  <td className="py-4 font-bold text-slate-900 dark:text-slate-200">—</td>
+                                </tr>
+                              ));
+                            })()}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                    {activeTab === 'interfaces' && (
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-left">
+                          <thead>
+                            <tr className="text-[10px] text-slate-500 uppercase font-black tracking-widest border-b border-slate-200 dark:border-white/5">
+                              <th className="pb-4">Name</th>
+                              <th className="pb-4">Type</th>
+                              <th className="pb-4">State</th>
+                              <th className="pb-4">IP Address</th>
+                              <th className="pb-4">RX Packets</th>
+                              <th className="pb-4">TX Packets</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {interfacesList.map((iface, i) => {
+                              const state = iface.state || iface['oper-state'];
+                              return (
+                                <tr key={i} onClick={() => setSelectedInterface(iface)} className="border-b border-slate-100 dark:border-white/5 last:border-0 text-sm font-medium hover:bg-slate-50 dark:hover:bg-white/5 transition-colors cursor-pointer group">
+                                  <td className="py-4 font-black text-slate-900 dark:text-slate-200 group-hover:text-primary transition-colors">{iface.name}</td>
+                                  <td className="py-4 uppercase text-[10px] text-slate-500">{iface.type}</td>
+                                  <td className="py-4">
+                                    <div className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${state === 'up' ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'}`}>
+                                      <div className={`w-1 h-1 rounded-full ${state === 'up' ? 'bg-success animate-pulse' : 'bg-danger'}`} />
+                                      {state}
+                                    </div>
+                                  </td>
+                                  <td className="py-4 font-mono text-xs text-slate-500">{Array.isArray(iface.address) ? iface.address[0] : (iface.address || '—')}</td>
+                                  <td className="py-4 text-xs font-bold text-info"><AnimatedNumber value={getIfaceRxPackets(iface)} /></td>
+                                  <td className="py-4 text-xs font-bold text-primary"><AnimatedNumber value={getIfaceTxPackets(iface)} /></td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                     {activeTab === 'routes' && (
                       <div className="overflow-x-auto">
                         <table className="w-full text-left">
