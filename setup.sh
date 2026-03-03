@@ -107,7 +107,7 @@ check_status_and_logs() {
     for i in {1..12}; do
         if curl -s http://localhost:8000/health | grep -q "ok"; then
             echo "[OK] Backend API is reachable and healthy."
-            return
+            break
         fi
 
         echo "  Attempt $i/12: Still waiting..."
