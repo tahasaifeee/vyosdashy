@@ -173,7 +173,7 @@ async def get_router_config(
     return {
         "config": config_data,
         "info": info_data,
-        "db_router": router_obj # Pass the refreshed router object
+        "db_router": RouterSchema.from_orm(router_obj)
     }
 
 @router.get("/{id}/info")
