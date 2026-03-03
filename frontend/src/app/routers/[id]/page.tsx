@@ -387,7 +387,7 @@ export default function RouterDashboard() {
             <h1 className="text-4xl font-black text-slate-900 dark:text-white tracking-tighter">{routerInfo?.name}</h1>
             
             {activeTab === 'dashboard' ? (
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 animate-in fade-in duration-500">
                 <div className="lg:col-span-2 space-y-8">
                   <DashboardCard title="Throughput Monitor (Mbps)">
                     <div className="h-80 mt-6">
@@ -402,7 +402,7 @@ export default function RouterDashboard() {
                       </ResponsiveContainer>
                     </div>
                   </DashboardCard>
-                  <DashboardCard title="Interfaces">
+                  <DashboardCard title="Interfaces Quick View">
                     <div className="grid grid-cols-2 gap-4 mt-6">
                       {interfacesList.map(i => (
                         <div key={i.name} className="glass-card p-4 flex justify-between items-center">
@@ -419,7 +419,7 @@ export default function RouterDashboard() {
                 </div>
               </div>
             ) : activeTab === 'firewall' ? (
-              <div className="space-y-8">
+              <div className="space-y-8 animate-in fade-in duration-500">
                 <div className="bg-primary/5 p-8 rounded-3xl border border-primary/20">
                   <h4 className="text-xl font-black mb-8 flex items-center gap-3"><ShieldCheck className="text-primary" /> Global Policy</h4>
                   <div className="flex items-center justify-between p-4 bg-white dark:bg-white/5 rounded-2xl border border-slate-200 dark:border-white/10">
@@ -466,95 +466,148 @@ export default function RouterDashboard() {
                   </div>
                 </div>
               </div>
-                    {activeTab === 'interfaces' && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {interfacesList.map((iface) => (
-                          <div key={iface.name} className="bg-white dark:bg-white/5 rounded-3xl border border-slate-200 dark:border-white/10 overflow-hidden group hover:border-primary/50 transition-all">
-                            <div className="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between bg-slate-50/50 dark:bg-white/5">
-                              <div className="flex items-center gap-4">
-                                <div className={`p-3 rounded-2xl ${iface.type === 'ethernet' ? 'bg-primary/10 text-primary' : 'bg-slate-200 dark:bg-white/10 text-slate-500'}`}>
-                                  {iface.type === 'ethernet' ? <Network className="w-5 h-5" /> : <RefreshCw className="w-5 h-5" />}
-                                </div>
-                                <div>
-                                  <h5 className="font-black text-slate-900 dark:text-white leading-none">{iface.name}</h5>
-                                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">{iface.type}</p>
-                                </div>
-                              </div>
-                              <div className={`w-2 h-2 rounded-full ${iface.state === 'up' || iface['rx-bytes'] > 0 ? 'bg-success shadow-glow' : 'bg-slate-300'}`} />
-                            </div>
-                            <div className="p-6 space-y-6">
-                              <div className="grid grid-cols-2 gap-4">
-                                <div className="space-y-1">
-                                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-tight">IP Address</p>
-                                  <p className="text-xs font-bold font-mono text-slate-700 dark:text-slate-300">{iface.address || 'Unassigned'}</p>
-                                </div>
-                                <div className="space-y-1">
-                                  <p className="text-[9px] font-black text-slate-400 uppercase tracking-tight">Hardware ID</p>
-                                  <p className="text-xs font-bold font-mono text-slate-700 dark:text-slate-300 truncate" title={iface['hw-id']}>{iface['hw-id'] || 'N/A'}</p>
-                                </div>
-                              </div>
-                              
-                              <div className="grid grid-cols-2 gap-6 pt-4 border-t border-slate-100 dark:border-white/5">
-                                <div className="space-y-3">
-                                  <div className="flex items-center gap-2 text-info">
-                                    <ArrowDown className="w-3 h-3" />
-                                    <span className="text-[10px] font-black uppercase">Received</span>
+            ) : (
+              <DashboardCard title={activeTab.replace('-', ' ')}>
+                <div className="animate-in fade-in duration-500">
+                  {loadingTab ? <div className="flex justify-center py-20"><RefreshCw className="animate-spin text-primary" /></div> : (
+                    <>
+                      {activeTab === 'interfaces' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          {interfacesList.map((iface) => (
+                            <div key={iface.name} className="bg-white dark:bg-white/5 rounded-3xl border border-slate-200 dark:border-white/10 overflow-hidden group hover:border-primary/50 transition-all">
+                              <div className="p-6 border-b border-slate-100 dark:border-white/5 flex items-center justify-between bg-slate-50/50 dark:bg-white/5">
+                                <div className="flex items-center gap-4">
+                                  <div className={`p-3 rounded-2xl ${iface.type === 'ethernet' ? 'bg-primary/10 text-primary' : 'bg-slate-200 dark:bg-white/10 text-slate-500'}`}>
+                                    {iface.type === 'ethernet' ? <Network className="w-5 h-5" /> : <RefreshCw className="w-5 h-5" />}
                                   </div>
                                   <div>
-                                    <p className="text-lg font-black tracking-tighter leading-none">{formatBytes(iface['rx-bytes'])}</p>
-                                    <p className="text-[10px] font-bold text-slate-500 mt-1">{iface['rx-packets']?.toLocaleString()} Packets</p>
+                                    <h5 className="font-black text-slate-900 dark:text-white leading-none">{iface.name}</h5>
+                                    <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">{iface.type}</p>
                                   </div>
                                 </div>
-                                <div className="space-y-3">
-                                  <div className="flex items-center gap-2 text-primary">
-                                    <ArrowUp className="w-3 h-3" />
-                                    <span className="text-[10px] font-black uppercase">Transmitted</span>
+                                <div className={`w-2 h-2 rounded-full ${iface.state === 'up' || iface['rx-bytes'] > 0 ? 'bg-success shadow-glow' : 'bg-slate-300'}`} />
+                              </div>
+                              <div className="p-6 space-y-6">
+                                <div className="grid grid-cols-2 gap-4">
+                                  <div className="space-y-1">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-tight">IP Address</p>
+                                    <p className="text-xs font-bold font-mono text-slate-700 dark:text-slate-300">{iface.address || 'Unassigned'}</p>
                                   </div>
-                                  <div>
-                                    <p className="text-lg font-black tracking-tighter leading-none">{formatBytes(iface['tx-bytes'])}</p>
-                                    <p className="text-[10px] font-bold text-slate-500 mt-1">{iface['tx-packets']?.toLocaleString()} Packets</p>
+                                  <div className="space-y-1">
+                                    <p className="text-[9px] font-black text-slate-400 uppercase tracking-tight">Hardware ID</p>
+                                    <p className="text-xs font-bold font-mono text-slate-700 dark:text-slate-300 truncate" title={iface['hw-id']}>{iface['hw-id'] || 'N/A'}</p>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-6 pt-4 border-t border-slate-100 dark:border-white/5">
+                                  <div className="space-y-3">
+                                    <div className="flex items-center gap-2 text-info">
+                                      <ArrowDown className="w-3 h-3" />
+                                      <span className="text-[10px] font-black uppercase">Received</span>
+                                    </div>
+                                    <div>
+                                      <p className="text-lg font-black tracking-tighter leading-none">{formatBytes(iface['rx-bytes'])}</p>
+                                      <p className="text-[10px] font-bold text-slate-500 mt-1">{iface['rx-packets']?.toLocaleString()} Packets</p>
+                                    </div>
+                                  </div>
+                                  <div className="space-y-3">
+                                    <div className="flex items-center gap-2 text-primary">
+                                      <ArrowUp className="w-3 h-3" />
+                                      <span className="text-[10px] font-black uppercase">Transmitted</span>
+                                    </div>
+                                    <div>
+                                      <p className="text-lg font-black tracking-tighter leading-none">{formatBytes(iface['tx-bytes'])}</p>
+                                      <p className="text-[10px] font-bold text-slate-500 mt-1">{iface['tx-packets']?.toLocaleString()} Packets</p>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    {activeTab === 'routes' ? (
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-left text-xs">
-                          <thead>
-                            <tr className="border-b dark:border-white/5">
-                              <th className="py-3 px-4 font-black uppercase text-slate-500">Protocol</th>
-                              <th className="py-3 px-4 font-black uppercase text-slate-500">Network</th>
-                              <th className="py-3 px-4 font-black uppercase text-slate-500">Next Hop</th>
-                              <th className="py-3 px-4 font-black uppercase text-slate-500">Interface</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {routingTable.map((route, i) => (
-                              <tr key={i} className="border-b dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
-                                <td className="py-3 px-4"><span className={`px-2 py-1 rounded font-bold uppercase text-[10px] ${route.selected ? 'bg-success/10 text-success' : 'bg-slate-100 text-slate-500'}`}>{route.protocol}</span></td>
-                                <td className="py-3 px-4 font-mono font-bold">{route.prefix}</td>
-                                <td className="py-3 px-4 font-mono">{route.next_hop?.next_hop || 'Direct'}</td>
-                                <td className="py-3 px-4 text-slate-500">{route.next_hop?.interface || '-'}</td>
+                          ))}
+                        </div>
+                      )}
+                      {activeTab === 'routes' && (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left text-xs">
+                            <thead>
+                              <tr className="border-b dark:border-white/5">
+                                <th className="py-3 px-4 font-black uppercase text-slate-500">Protocol</th>
+                                <th className="py-3 px-4 font-black uppercase text-slate-500">Network</th>
+                                <th className="py-3 px-4 font-black uppercase text-slate-500">Next Hop</th>
+                                <th className="py-3 px-4 font-black uppercase text-slate-500">Interface</th>
                               </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : (
-                      <pre className="bg-slate-900 text-slate-300 p-8 rounded-3xl font-mono text-xs overflow-x-auto min-h-[400px]">
-                        {activeTab === 'conntrack' ? conntrack : 
-                         activeTab === 'top' ? processes : 
-                         activeTab === 'arp' ? arpTable : 
-                         activeTab === 'leases' ? dhcpLeases : 
-                         activeTab === 'nat' ? natTranslations : 
-                         activeTab === 'logs' ? logs.join('\n') :
-                         'No data available.'}
-                      </pre>
-                    )}
+                            </thead>
+                            <tbody>
+                              {routingTable.map((route, i) => (
+                                <tr key={i} className="border-b dark:border-white/5 hover:bg-slate-50 dark:hover:bg-white/5 transition-colors">
+                                  <td className="py-3 px-4"><span className={`px-2 py-1 rounded font-bold uppercase text-[10px] ${route.selected ? 'bg-success/10 text-success' : 'bg-slate-100 text-slate-500'}`}>{route.protocol}</span></td>
+                                  <td className="py-3 px-4 font-mono font-bold">{route.prefix}</td>
+                                  <td className="py-3 px-4 font-mono">{route.next_hop?.next_hop || 'Direct'}</td>
+                                  <td className="py-3 px-4 text-slate-500">{route.next_hop?.interface || '-'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                      {activeTab === 'vpn' && (
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                          {['ipsec', 'l2tp', 'openconnect', 'pptp', 'sstp'].map(svc => (
+                            <div key={svc} className="p-6 bg-slate-50 dark:bg-white/5 rounded-3xl border dark:border-white/5 space-y-4">
+                              <div className="flex items-center justify-between">
+                                <span className="font-black uppercase text-xs">{svc} VPN</span>
+                                <div className={`w-2 h-2 rounded-full ${(configStatus?.vpn as any)?.[svc] ? 'bg-success' : 'bg-slate-300'}`} />
+                              </div>
+                              <button onClick={() => toggleVpnService(svc, (configStatus?.vpn as any)?.[svc])} disabled={configLoading} className={`w-full py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${(configStatus?.vpn as any)?.[svc] ? 'bg-danger/10 text-danger hover:bg-danger hover:text-white' : 'bg-success/10 text-success hover:bg-success hover:text-white'}`}>
+                                {(configStatus?.vpn as any)?.[svc] ? 'Disable' : 'Enable'}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {['conntrack', 'top', 'arp', 'leases', 'nat', 'logs'].includes(activeTab) && (
+                        <pre className="bg-slate-900 text-slate-300 p-8 rounded-3xl font-mono text-xs overflow-x-auto min-h-[400px]">
+                          {activeTab === 'conntrack' ? conntrack : 
+                           activeTab === 'top' ? processes : 
+                           activeTab === 'arp' ? arpTable : 
+                           activeTab === 'leases' ? dhcpLeases : 
+                           activeTab === 'nat' ? natTranslations : 
+                           logs.join('\n')}
+                        </pre>
+                      )}
+                      {activeTab === 'ping' && (
+                        <div className="space-y-6">
+                          <form onSubmit={handlePing} className="flex gap-4">
+                            <input className="flex-1 bg-slate-50 dark:bg-dark-900 border dark:border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary" placeholder="8.8.8.8" value={pingTarget} onChange={e => setPingTarget(e.target.value)} />
+                            <button type="submit" disabled={pingLoading} className="btn-primary px-8 flex items-center justify-center gap-2">{pingLoading ? <RefreshCw className="animate-spin w-4 h-4" /> : <Play className="w-4 h-4" />} Ping</button>
+                          </form>
+                          <pre className="bg-slate-900 text-slate-300 p-8 rounded-3xl font-mono text-xs min-h-[200px]">{pingOutput}</pre>
+                        </div>
+                      )}
+                      {activeTab === 'traceroute' && (
+                        <div className="space-y-6">
+                          <form onSubmit={handleTraceroute} className="flex gap-4">
+                            <input className="flex-1 bg-slate-50 dark:bg-dark-900 border dark:border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary" placeholder="google.com" value={tracerouteTarget} onChange={e => setTracerouteTarget(e.target.value)} />
+                            <button type="submit" disabled={tracerouteLoading} className="btn-primary px-8 flex items-center justify-center gap-2">{tracerouteLoading ? <RefreshCw className="animate-spin w-4 h-4" /> : <Terminal className="w-4 h-4" />} Trace</button>
+                          </form>
+                          <pre className="bg-slate-900 text-slate-300 p-8 rounded-3xl font-mono text-xs min-h-[300px]">{tracerouteOutput}</pre>
+                        </div>
+                      )}
+                      {activeTab === 'command' && (
+                        <div className="space-y-6">
+                          <form onSubmit={handleCommand} className="flex gap-4">
+                            <div className="flex-1 relative">
+                              <input className="w-full bg-white dark:bg-dark-900 border dark:border-white/10 rounded-xl py-3 px-4 outline-none focus:ring-2 focus:ring-primary font-mono text-sm" placeholder="e.g. show interfaces or set vpn..." value={customCommand} onChange={e => setCustomCommand(e.target.value)} />
+                            </div>
+                            <button type="submit" disabled={commandLoading} className="btn-primary px-8 flex items-center justify-center gap-2">{commandLoading ? <RefreshCw className="animate-spin w-4 h-4" /> : <Play className="w-4 h-4" />} Run</button>
+                          </form>
+                          <pre className="bg-slate-950 text-slate-200 p-8 rounded-3xl border dark:border-white/5 font-mono text-[11px] overflow-x-auto min-h-[500px] shadow-2xl">{commandOutput || 'Enter command...'}</pre>
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              </DashboardCard>
+            )}
           </div>
         </main>
       </div>
