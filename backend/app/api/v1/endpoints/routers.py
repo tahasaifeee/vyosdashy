@@ -25,9 +25,6 @@ async def read_routers(
     limit: int = 100,
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
-    """
-    Retrieve routers.
-    """
     result = await db.execute(select(Router).offset(skip).limit(limit))
     routers = result.scalars().all()
     return routers
@@ -40,18 +37,12 @@ async def create_router(
     router_in: RouterCreate,
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
-    """
-    Create new router and trigger immediate connectivity test.
-    """
     router = Router(**router_in.dict())
     db.add(router)
     await db.commit()
     await db.refresh(router)
-
-    # Trigger immediate background collection so user doesn't see "Unknown" for 30s
     from app.services.metrics_service import MetricsService
     background_tasks.add_task(MetricsService.collect_metrics_by_id, router.id)
-
     return router
 
 @router.get("/{id}", response_model=RouterSchema)
@@ -61,9 +52,6 @@ async def read_router(
     id: int,
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
-    """
-    Get router by ID.
-    """
     result = await db.execute(select(Router).where(Router.id == id))
     router = result.scalars().first()
     if not router:
@@ -78,18 +66,13 @@ async def update_router(
     router_in: RouterUpdate,
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
-    """
-    Update a router.
-    """
     result = await db.execute(select(Router).where(Router.id == id))
     router = result.scalars().first()
     if not router:
         raise HTTPException(status_code=404, detail="Router not found")
-    
     update_data = router_in.dict(exclude_unset=True)
     for field, value in update_data.items():
         setattr(router, field, value)
-        
     db.add(router)
     await db.commit()
     await db.refresh(router)
@@ -102,36 +85,21 @@ async def test_router_connection(
     id: int,
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
-    """
-    Test connectivity to a VyOS router.
-    """
     result = await db.execute(select(Router).where(Router.id == id))
     router = result.scalars().first()
     if not router:
         raise HTTPException(status_code=404, detail="Router not found")
-    
     client = VyOSClient(hostname=router.hostname, api_key=router.api_key)
-    test_res, info_res = await asyncio.gather(
-        client.test_connection(),
-        client.get_info(),
-    )
+    test_res, info_res = await asyncio.gather(client.test_connection(), client.get_info())
     is_online = test_res.get("success") is True
-
     router.status = RouterStatus.ONLINE if is_online else RouterStatus.OFFLINE
     router.last_seen = datetime.datetime.now(timezone.utc)
     if info_res.get("success") and info_res.get("data"):
         router.version = info_res["data"].get("version")
-    
     db.add(router)
     await db.commit()
     await db.refresh(router)
-    
-    return {
-        "id": id, 
-        "name": router.name, 
-        "is_online": is_online,
-        "error": test_res.get("error")
-    }
+    return {"id": id, "name": router.name, "is_online": is_online, "error": test_res.get("error")}
 
 @router.get("/{id}/config")
 async def get_router_config(
@@ -140,71 +108,21 @@ async def get_router_config(
     id: int,
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
-    """
-    Fetch live VyOS full configuration and system info for the dashboard.
-    Returns: { config: {...}, info: { version, hostname, banner } }
-    """
     result = await db.execute(select(Router).where(Router.id == id))
     router_obj = result.scalars().first()
     if not router_obj:
         raise HTTPException(status_code=404, detail="Router not found")
-
     client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
-
-    # Run fetches concurrently
-    config_res, info_data = await asyncio.gather(
-        client.get_config([]),
-        client.get_version_info(),
-    )
-
+    config_res, info_data = await asyncio.gather(client.get_config([]), client.get_version_info())
     config_data = config_res.get("data") if config_res.get("success") else {}
-
-    # Ensure hostname is populated from config if not in info
     if not info_data.get("hostname") and config_data.get("system", {}).get("host-name"):
         info_data["hostname"] = config_data["system"]["host-name"]
-
-    # Update database version if we found it
     if info_data.get("version") and info_data["version"] != "N/A":
         router_obj.version = info_data["version"]
         db.add(router_obj)
         await db.commit()
         await db.refresh(router_obj)
-
-    return {
-        "config": config_data,
-        "info": info_data,
-        "db_router": RouterSchema.from_orm(router_obj)
-    }
-
-@router.get("/{id}/info")
-async def get_router_info_proxy(
-    request: Request,
-    id: int,
-    db: AsyncSession = Depends(deps.get_db),
-    current_user: User = Depends(deps.get_current_user),
-) -> Any:
-    """
-    Proxy the /info endpoint of a specific VyOS router with strict validation.
-    """
-    try:
-        raw_params = dict(request.query_params)
-        params = InfoQueryParams(**raw_params)
-        
-        result = await db.execute(select(Router).where(Router.id == id))
-        router_obj = result.scalars().first()
-        if not router_obj:
-            raise HTTPException(status_code=404, detail="Router not found")
-
-        client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
-        # Convert internal string params back to bools for the client
-        return await client.get_info(
-            version=(params.version == "true"), 
-            hostname=(params.hostname == "true")
-        )
-    except ValidationError as e:
-        err = e.errors()[0]
-        error_msg = f"{{'type': '{err['type']}', 'loc': {err['loc']}, 'msg': '{err['msg']}', 'input': '{err['input']}'}}"
-        return JSONResponse(status_code=400, content={"success": False, "error": error_msg, "data": None})
+    return {"config": config_data, "info": info_data, "db_router": RouterSchema.from_orm(router_obj)}
 
 @router.get("/{id}/routes")
 async def get_router_routes(
@@ -213,14 +131,10 @@ async def get_router_routes(
     id: int,
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
-    """
-    Fetch live IPv4 routing table.
-    """
     result = await db.execute(select(Router).where(Router.id == id))
     router_obj = result.scalars().first()
     if not router_obj:
         raise HTTPException(status_code=404, detail="Router not found")
-
     client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
     routes = await client.get_routing_table()
     return routes or []
@@ -232,14 +146,10 @@ async def get_router_logs(
     id: int,
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
-    """
-    Fetch last system logs.
-    """
     result = await db.execute(select(Router).where(Router.id == id))
     router_obj = result.scalars().first()
     if not router_obj:
         raise HTTPException(status_code=404, detail="Router not found")
-
     client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
     logs = await client.get_system_logs()
     return logs or []
@@ -251,14 +161,10 @@ async def get_router_connections(
     id: int,
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
-    """
-    Fetch connection statistics.
-    """
     result = await db.execute(select(Router).where(Router.id == id))
     router_obj = result.scalars().first()
     if not router_obj:
         raise HTTPException(status_code=404, detail="Router not found")
-
     client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
     stats = await client.get_active_connections()
     return {"stats": stats}
@@ -272,14 +178,10 @@ async def ping_from_router(
     count: int = Body(4, embed=True),
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
-    """
-    Run ping command from the router to a target host.
-    """
     result = await db.execute(select(Router).where(Router.id == id))
     router_obj = result.scalars().first()
     if not router_obj:
         raise HTTPException(status_code=404, detail="Router not found")
-
     client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
     output = await client.ping(host, count)
     return {"output": output}
@@ -292,14 +194,10 @@ async def traceroute_from_router(
     host: str = Body(..., embed=True),
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
-    """
-    Run traceroute command from the router to a target host.
-    """
     result = await db.execute(select(Router).where(Router.id == id))
     router_obj = result.scalars().first()
     if not router_obj:
         raise HTTPException(status_code=404, detail="Router not found")
-
     client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
     output = await client.traceroute(host)
     return {"output": output}
@@ -312,47 +210,13 @@ async def monitor_traffic_capture(
     interface: str = Body(..., embed=True),
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
-    """
-    Capture a burst of traffic from a specific interface.
-    """
     result = await db.execute(select(Router).where(Router.id == id))
     router_obj = result.scalars().first()
     if not router_obj:
         raise HTTPException(status_code=404, detail="Router not found")
-
     client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
     output = await client.capture_traffic(interface)
     return {"output": output}
-
-@router.post("/{id}/config/timezone")
-async def update_router_timezone(
-    *,
-    db: AsyncSession = Depends(deps.get_db),
-    id: int,
-    timezone: str = Body(..., embed=True),
-    current_user: User = Depends(deps.get_current_user),
-) -> Any:
-    """
-    Update the system timezone on the VyOS router.
-    """
-    result = await db.execute(select(Router).where(Router.id == id))
-    router_obj = result.scalars().first()
-    if not router_obj:
-        raise HTTPException(status_code=404, detail="Router not found")
-
-    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
-    
-    # 1. Set config
-    res_set = await client.set_config(["system", "time-zone", timezone])
-    if not res_set.get("success"):
-        raise HTTPException(status_code=400, detail=f"Failed to set timezone: {res_set.get('error') or res_set.get('data')}")
-    
-    # 2. Save config
-    res_save = await client.save()
-    if not res_save.get("success"):
-        raise HTTPException(status_code=500, detail=f"Config set but failed to save: {res_save.get('error')}")
-
-    return {"success": True, "message": f"Timezone updated to {timezone}"}
 
 @router.get("/{id}/top")
 async def get_router_processes(
@@ -361,14 +225,10 @@ async def get_router_processes(
     id: int,
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
-    """
-    Fetch live system processes (top).
-    """
     result = await db.execute(select(Router).where(Router.id == id))
     router_obj = result.scalars().first()
     if not router_obj:
         raise HTTPException(status_code=404, detail="Router not found")
-
     client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
     output = await client.show_text(["system", "processes"])
     return {"output": output}
@@ -381,57 +241,114 @@ async def run_custom_show_command(
     command: List[str] = Body(..., embed=True),
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
-    """
-    Run any 'show' command on the router.
-    """
     result = await db.execute(select(Router).where(Router.id == id))
     router_obj = result.scalars().first()
     if not router_obj:
         raise HTTPException(status_code=404, detail="Router not found")
-
     client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
     output = await client.show_text(command)
     return {"output": output}
 
-@router.post("/{id}/traceroute")
-async def traceroute_from_router(
+@router.get("/{id}/bgp/summary")
+async def get_bgp_summary(
     *,
     db: AsyncSession = Depends(deps.get_db),
     id: int,
-    host: str = Body(..., embed=True),
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
     """
-    Run traceroute command from the router to a target host.
+    Fetch BGP neighbor summary.
     """
     result = await db.execute(select(Router).where(Router.id == id))
     router_obj = result.scalars().first()
     if not router_obj:
         raise HTTPException(status_code=404, detail="Router not found")
-
     client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
-    output = await client.traceroute(host)
+    output = await client.show_text(["bgp", "summary"])
     return {"output": output}
 
-@router.post("/{id}/monitor/traffic")
-async def monitor_traffic_capture(
+@router.get("/{id}/static-routes")
+async def get_static_routes(
     *,
     db: AsyncSession = Depends(deps.get_db),
     id: int,
-    interface: str = Body(..., embed=True),
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
     """
-    Capture a burst of traffic from a specific interface.
+    Fetch all static routes (including blackholes).
     """
     result = await db.execute(select(Router).where(Router.id == id))
     router_obj = result.scalars().first()
     if not router_obj:
         raise HTTPException(status_code=404, detail="Router not found")
-
     client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
-    output = await client.capture_traffic(interface)
-    return {"output": output}
+    # Get config for static protocols
+    res = await client.get_config(["protocols", "static"])
+    return res.get("data", {})
+
+@router.post("/{id}/static-routes")
+async def add_static_route(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    id: int,
+    network: str = Body(...),
+    next_hop: str = Body(None),
+    blackhole: bool = Body(False),
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    result = await db.execute(select(Router).where(Router.id == id))
+    router_obj = result.scalars().first()
+    if not router_obj:
+        raise HTTPException(status_code=404, detail="Router not found")
+    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
+    
+    path = ["protocols", "static", "route", network]
+    if blackhole:
+        res = await client.set_config(path + ["blackhole"])
+    elif next_hop:
+        res = await client.set_config(path + ["next-hop", next_hop])
+    else:
+        raise HTTPException(status_code=400, detail="Must provide next_hop or blackhole=True")
+
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    
+    await client.save()
+    return {"success": True}
+
+@router.get("/{id}/snmp")
+async def get_snmp_config(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    id: int,
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    result = await db.execute(select(Router).where(Router.id == id))
+    router_obj = result.scalars().first()
+    if not router_obj:
+        raise HTTPException(status_code=404, detail="Router not found")
+    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
+    res = await client.get_config(["service", "snmp"])
+    return res.get("data", {})
+
+@router.post("/{id}/config/timezone")
+async def update_router_timezone(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    id: int,
+    timezone: str = Body(..., embed=True),
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    result = await db.execute(select(Router).where(Router.id == id))
+    router_obj = result.scalars().first()
+    if not router_obj:
+        raise HTTPException(status_code=404, detail="Router not found")
+    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
+    res_set = await client.set_config(["system", "time-zone", timezone])
+    if not res_set.get("success"):
+        raise HTTPException(status_code=400, detail=f"Failed to set timezone: {res_set.get('error')}")
+    await client.save()
+    return {"success": True}
 
 @router.put("/{id}/config/vpn")
 async def update_vpn_service_config(
@@ -442,32 +359,82 @@ async def update_vpn_service_config(
     enabled: bool = Body(...),
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
-    """
-    Enable or disable a VPN service.
-    Supported services: ipsec, l2tp, openconnect, pptp, sstp
-    """
     result = await db.execute(select(Router).where(Router.id == id))
     router_obj = result.scalars().first()
     if not router_obj:
         raise HTTPException(status_code=404, detail="Router not found")
-
     client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
-    
-    # Path construction
-    # Most VPN services in VyOS are at ['vpn', service]
-    # For remote-access types it might vary, but user provided completions were for 'set vpn ...'
     path = ["vpn", service]
-    
     if enabled:
-        # Just creating the node is often enough to 'enable' it with defaults
-        # or it might need specific sub-nodes. For a 'quick toggle', we try to set the base.
         res = await client.set_config(path)
     else:
         res = await client.delete_config(path)
-
     if not res.get("success"):
         raise HTTPException(status_code=400, detail=res.get("error") or "Failed to update config")
+    await client.save()
+    return {"success": True}
 
+@router.put("/{id}/firewall/settings")
+async def update_firewall_global_settings(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    id: int,
+    setting: str = Body(...),
+    enabled: bool = Body(...),
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    result = await db.execute(select(Router).where(Router.id == id))
+    router_obj = result.scalars().first()
+    if not router_obj:
+        raise HTTPException(status_code=404, detail="Router not found")
+    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
+    path = ["firewall", setting]
+    val = "enable" if enabled else "disable"
+    res = await client.set_config(path, val)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error") or "Failed to update firewall setting")
+    await client.save()
+    return {"success": True}
+
+@router.post("/{id}/firewall/groups/{group_name}/address")
+async def add_firewall_group_address(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    id: int,
+    group_name: str,
+    address: str = Body(..., embed=True),
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    result = await db.execute(select(Router).where(Router.id == id))
+    router_obj = result.scalars().first()
+    if not router_obj:
+        raise HTTPException(status_code=404, detail="Router not found")
+    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
+    path = ["firewall", "group", "address-group", group_name, "address", address]
+    res = await client.set_config(path)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error") or "Failed to add address")
+    await client.save()
+    return {"success": True}
+
+@router.delete("/{id}/firewall/groups/{group_name}/address/{address:path}")
+async def remove_firewall_group_address(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    id: int,
+    group_name: str,
+    address: str,
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    result = await db.execute(select(Router).where(Router.id == id))
+    router_obj = result.scalars().first()
+    if not router_obj:
+        raise HTTPException(status_code=404, detail="Router not found")
+    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
+    path = ["firewall", "group", "address-group", group_name, "address", address]
+    res = await client.delete_config(path)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error") or "Failed to remove address")
     await client.save()
     return {"success": True}
 
@@ -478,14 +445,10 @@ async def delete_router(
     id: int,
     current_user: User = Depends(deps.get_current_user),
 ) -> Any:
-    """
-    Delete a router.
-    """
     result = await db.execute(select(Router).where(Router.id == id))
     router = result.scalars().first()
     if not router:
         raise HTTPException(status_code=404, detail="Router not found")
-        
     await db.delete(router)
     await db.commit()
     return router
