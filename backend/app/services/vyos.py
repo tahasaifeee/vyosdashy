@@ -246,6 +246,13 @@ class VyOSClient:
     async def capture_traffic(self, interface: str, count: int = 50) -> str:
         return await self.show_text(["monitor", "traffic", interface, "unlimited"])
 
+    async def get_vpn_ipsec_status(self) -> str:
+        return await self.show_text(["vpn", "ipsec", "sa"])
+
+    async def get_vpn_ipsec_config(self) -> Dict[str, Any]:
+        res = await self.get_config(["vpn", "ipsec"])
+        return res.get("data", {})
+
     async def run_op(self, cmd_parts: List[str]) -> str:
         """
         Run an arbitrary operational command.

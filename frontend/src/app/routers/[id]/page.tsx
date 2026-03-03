@@ -113,6 +113,8 @@ export default function RouterDashboard() {
   const [bgpSummary, setBgpSummary] = useState<string>('');
   const [staticRoutes, setStaticRoutes] = useState<any>({});
   const [snmpConfig, setSnmpConfig] = useState<any>({});
+  const [ipsecStatus, setIpsecStatus] = useState<string>('');
+  const [ipsecConfig, setIpsecConfig] = useState<any>({});
   const [loadingTab, setLoadingTab] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
