@@ -309,7 +309,9 @@ async def update_router_timezone(
     
     # 2. Save config
     res_save = await client.save()
-    
+    if not res_save.get("success"):
+        raise HTTPException(status_code=500, detail=f"Config set but failed to save: {res_save.get('error')}")
+
     return {"success": True, "message": f"Timezone updated to {timezone}"}
 
 @router.delete("/{id}", response_model=RouterSchema)

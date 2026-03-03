@@ -115,6 +115,7 @@ export default function RouterDashboard() {
   const [vyosInfo, setVyosInfo] = useState<any>(null);
   const [timeRange, setTimeRange] = useState('30');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [selectedInterface, setSelectedInterface] = useState<any>(null);
   
@@ -185,7 +186,8 @@ export default function RouterDashboard() {
         }
         setMetrics(processed);
       }
-    } catch (_) {
+    } catch (err: any) {
+      setError(err.response?.data?.detail || err.message || 'Failed to load router data.');
     } finally {
       setLoading(false);
     }
@@ -205,8 +207,11 @@ export default function RouterDashboard() {
         const res = await api.get(`/routers/${id}/connections`);
         setConntrack(res.data.stats || '');
       }
-    } catch (err) {}
-    setLoadingTab(false);
+    } catch (err: any) {
+      console.error('Failed to load tab data:', err.message || err);
+    } finally {
+      setLoadingTab(false);
+    }
   };
 
   useEffect(() => {
@@ -324,6 +329,18 @@ export default function RouterDashboard() {
     <div className="min-h-screen pt-24 pb-12 px-6 lg:px-12 bg-background transition-colors duration-300">
       <Navbar />
       <DashboardSkeleton />
+    </div>
+  );
+
+  if (error) return (
+    <div className="min-h-screen pt-24 pb-12 px-6 lg:px-12 bg-background transition-colors duration-300">
+      <Navbar />
+      <div className="max-w-lg mx-auto mt-16 p-6 bg-danger/10 border border-danger/30 rounded-2xl text-center">
+        <p className="text-sm font-bold text-danger mb-4">{error}</p>
+        <button onClick={() => { setError(null); setLoading(true); fetchData(); }} className="px-4 py-2 text-xs font-black uppercase tracking-wider bg-danger text-white rounded-xl hover:bg-danger/90">
+          Retry
+        </button>
+      </div>
     </div>
   );
 

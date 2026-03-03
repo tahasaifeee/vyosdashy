@@ -3,7 +3,7 @@ from typing import Any, List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
-from sqlalchemy import desc
+from sqlalchemy import desc, func
 
 from app.api import deps
 from app.models.alert import Alert
@@ -34,8 +34,8 @@ async def get_unread_count(
     """
     Get count of unread alerts.
     """
-    result = await db.execute(select(Alert).where(Alert.is_read == False))
-    count = len(result.scalars().all())
+    result = await db.execute(select(func.count()).where(Alert.is_read == False).select_from(Alert))
+    count = result.scalar_one()
     return {"count": count}
 
 @router.post("/mark-all-read")

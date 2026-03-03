@@ -39,7 +39,7 @@ async def get_current_user(
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     if not user.is_active:
-        raise HTTPException(status_code=400, detail="Inactive user")
+        raise HTTPException(status_code=403, detail="Inactive user")
     return user
 
 
@@ -48,6 +48,6 @@ def get_current_active_superuser(
 ) -> User:
     if not current_user.is_superuser:
         raise HTTPException(
-            status_code=400, detail="The user doesn't have enough privileges"
+            status_code=403, detail="The user doesn't have enough privileges"
         )
     return current_user
