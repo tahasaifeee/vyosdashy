@@ -48,24 +48,57 @@ docker exec -i <backend-container> python app/create_first_user.py admin@example
 
 ## Architecture
 
+### API Route Structure
+
+All API endpoints are mounted at `/api/v1/` (set by `settings.API_V1_STR`). Swagger UI is at `/api/v1/docs`, OpenAPI JSON at `/api/v1/openapi.json`. The two public endpoints (`GET /health`, `GET /info`) are mounted directly on the app root.
+
 ### Backend (`backend/app/`)
-- `main.py` — FastAPI entry point. Lifespan runs `Base.metadata.create_all`, then executes inline `ALTER TABLE` SQL to add columns (`load_average`, `active_sessions`, `uptime`, `disk_usage`) that were added after initial schema creation. Also exposes `GET /health` (`{"status": "ok"}`) and `GET /info` (VyOS-spec info endpoint with `version`/`hostname` query params). CORS falls back to `["*"]` if `BACKEND_CORS_ORIGINS` is empty.
+- `main.py` — FastAPI entry point. Lifespan runs `Base.metadata.create_all`, then executes inline `ALTER TABLE` SQL to add columns (`load_average`, `active_sessions`, `uptime`, `disk_usage`) that were added after initial schema creation. Also exposes `GET /health` (`{"status": "ok"}`) and `GET /info` (VyOS-spec info endpoint with `version`/`hostname` query params accepted as string literals `"true"`/`"false"`). CORS uses `allow_credentials=False` — JWT must go in the `Authorization: Bearer` header, not cookies. Falls back to `["*"]` if `BACKEND_CORS_ORIGINS` is empty.
 - `core/config.py` — Pydantic `Settings`. `SECRET_KEY` has **no default** — app crashes at startup if missing. `BACKEND_CORS_ORIGINS` is `List[str]` (plain strings, not `AnyHttpUrl`) to prevent Pydantic v2 from normalizing URLs and adding trailing slashes that break CORS matching.
 - `core/security.py` — JWT (HS256) creation/verification and bcrypt password hashing. Tokens expire in 60 minutes. Uses `datetime.now(timezone.utc)` (not deprecated `utcnow()`).
 - `api/deps.py` — `get_current_user` decodes JWT, handles `TypeError`/`ValueError` on bad `sub` claim, returns 403 (not 500) on invalid tokens. `get_current_active_superuser` for admin-only endpoints.
 - `api/v1/endpoints/login.py` — OAuth2 token endpoint. User-not-found and wrong-password checks are combined into one branch to prevent user enumeration.
 - `api/v1/endpoints/users.py` — `POST /` requires superuser. `GET /me` is `async def`.
-- `api/v1/endpoints/routers.py` — Router CRUD. On create, triggers immediate metrics collection via FastAPI `BackgroundTasks` (not `asyncio.create_task`).
+- `api/v1/endpoints/routers.py` — Router CRUD + live-proxy endpoints (see below). On create, triggers immediate metrics collection via FastAPI `BackgroundTasks` (not `asyncio.create_task`). The `Router` response schema deliberately omits `api_key` — it is never returned to the client.
 - `api/v1/endpoints/metrics.py` — `limit` is capped at 1000 via `Query(ge=1, le=1000)`. Both endpoints validate `router_id` existence (404 if not found).
 - `api/v1/endpoints/alerts.py` — Alerts CRUD: list (paginated, newest-first), unread count, mark-all-read. Alerts are auto-created by `metrics_service.py` on status changes—there is no manual alert creation endpoint.
 - `services/vyos.py` — `VyOSClient` wraps the `pyvyos` library (`VyDevice`). All sync `pyvyos` calls are wrapped in `asyncio.to_thread()` to avoid blocking the event loop. `commit()` is a no-op (pyvyos applies set/delete atomically); `save()` calls `device.config_file_save()`. For metrics, GraphQL (`/graphql`) is tried first (VyOS 1.4+ only), with legacy `show` text commands as fallback for older routers. `verify=False` for all requests.
 - `services/metrics_service.py` — `collect_all_metrics()` iterates enabled routers sequentially (not truly parallel). `collect_metrics_by_id()` opens its own `AsyncSessionLocal`. On status change (excluding initial `UNKNOWN→*`), inserts an `Alert`. Metrics loop starts via `asyncio.create_task()` in lifespan with a 10s initial delay.
+- `diagnose_db.py` — Standalone utility at `backend/diagnose_db.py`. Run with `python diagnose_db.py` from the `backend/` directory to print router count, total metrics rows, and `router_metrics` column names. Useful for confirming migrations applied correctly.
+
+### Router Live-Proxy Endpoints (`/api/v1/routers/{id}/`)
+
+These endpoints make live requests to the actual VyOS device on every call (no caching):
+
+| Endpoint | Method | Description |
+|---|---|---|
+| `test-connection` | POST | Connectivity check; updates `router.status` + `last_seen` in DB |
+| `config` | GET | Full router config tree + version info; runs `get_config([])` + `get_version_info()` concurrently |
+| `info` | GET | Proxies `/info?version=true&hostname=true` to the VyOS router |
+| `routes` | GET | Live IPv4 routing table (GraphQL first, regex-parsed text fallback) |
+| `logs` | GET | Last 50 lines of system log |
+| `connections` | GET | conntrack table or connection statistics |
+| `ping` | POST | Runs `ping {host} count {n}` from the router; body `{host, count}` |
+| `config/timezone` | POST | Sets `system time-zone` then saves config; body `{timezone}` |
 
 ### Frontend (`frontend/src/`)
 - `lib/api.ts` — Axios instance. Reads `NEXT_PUBLIC_API_URL` env var, falls back to `window.location.hostname:8000`. JWT injected from `localStorage` on every request via interceptor. **All API calls must use this instance.**
 - `app/routers/page.tsx` — Router list + Add/Delete modal. Error message on add failure shows `err.response?.data?.detail` (backend error) or fallback text.
 - `app/routers/[id]/page.tsx` — Per-router dashboard. Throughput chart computes **delta between consecutive samples** divided by 30s poll interval (Mbps), not raw cumulative byte counters. Polls every 30s via `setInterval`.
 - `app/login/page.tsx` — Login form, stores JWT in `localStorage` on success.
+- `components/Navbar.tsx` — Polls `/alerts/` + `/alerts/unread-count` + `/users/me` every 60s. Handles dark/light mode toggle via `ThemeProvider`.
+- `components/ThemeProvider.tsx` — React context providing `{ theme, toggleTheme }`. Persists preference to `localStorage`. Applies `dark` class to `<html>`.
+
+#### Frontend Design System
+The UI uses Tailwind with a custom token layer. Key custom classes defined in the global CSS:
+- `glass-modal` — frosted-glass card with backdrop blur
+- `btn-primary`, `text-primary`, `bg-primary` — brand accent colour
+- `text-danger`, `bg-danger` — destructive/error state
+- `text-warning`, `text-info` — alert severity colours
+- `dark:bg-dark-900` — primary dark background token
+- `custom-scrollbar` — styled scrollbar for overflowing lists
+
+When adding new UI elements, follow these token names rather than raw Tailwind colours so dark mode works automatically.
 
 ### Data Flow
 1. Frontend authenticates → JWT stored in `localStorage`
@@ -105,6 +138,8 @@ NEXT_PUBLIC_API_URL=http://<server-ip>:8000
 ```
 
 `BACKEND_CORS_ORIGINS` must include the **actual server IP** (not just localhost), otherwise all browser API calls are blocked by CORS. `setup.sh` auto-detects the public IP and includes it in the default.
+
+> **Redis note**: `REDIS_URL` and the `redis` service are declared but **not yet used** by the backend. No Redis client is imported anywhere in the Python code. The service is reserved for future caching/task-queue work.
 
 ## Key Conventions
 
