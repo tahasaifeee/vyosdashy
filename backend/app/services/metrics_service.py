@@ -173,15 +173,35 @@ class MetricsService:
                     cpu_usage = load_avg["1m"]
                     mem = sys_info.get("memory") or {}
                     if mem.get("total", 0) > 0:
-                        memory_usage = round(mem.get("used", 0) / mem.get("total") * 100, 1)
-                    uptime = int(sys_info.get("uptime", 0))
+                        raw_pct = mem.get("used", 0) / mem.get("total") * 100
+                        # VyOS GraphQL sometimes returns total in a larger unit than used
+                        # (e.g. total in MB, used in KB) producing values well above 100%.
+                        # Divide by 1000 to normalise when clearly wrong.
+                        memory_usage = round(raw_pct / 1000.0 if raw_pct > 100 else raw_pct, 1)
+                    uptime = int(sys_info.get("uptime") or 0)
                 else:
-                    # Legacy Fallback
+                    # GraphQL not available — full legacy fallback
                     try:
                         up_text = await client.get_legacy_system_stats()
                         uptime, load_avg = MetricsService.parse_legacy_uptime(up_text)
                         cpu_usage = load_avg["1m"]
-                        
+
+                        mem_text = await client.get_legacy_memory_stats()
+                        memory_usage = MetricsService.parse_legacy_memory(mem_text)
+                    except: pass
+
+                # Per-metric legacy fallbacks: uptime == 0 on a connected router means
+                # GraphQL returned null for those fields; fetch them via CLI instead.
+                if uptime == 0:
+                    try:
+                        up_text = await client.get_legacy_system_stats()
+                        uptime, fallback_load = MetricsService.parse_legacy_uptime(up_text)
+                        load_avg = fallback_load
+                        cpu_usage = fallback_load["1m"]
+                    except: pass
+
+                if memory_usage == 0.0:
+                    try:
                         mem_text = await client.get_legacy_memory_stats()
                         memory_usage = MetricsService.parse_legacy_memory(mem_text)
                     except: pass
