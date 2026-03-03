@@ -82,7 +82,29 @@ DOCKER_COMPOSE_CMD=$(detect_docker_compose)
 
 # --- MODULES ---
 
-check_status_and_logs() {
+view_live_logs() {
+    echo ""
+    echo "--- Live Log Stream ---"
+    echo "1) All Services (Standard)"
+    echo "2) All Services (Errors Only)"
+    echo "3) Backend Only"
+    echo "4) Frontend Only"
+    echo "5) Database Only"
+    echo "6) Back to Main Menu"
+    prompt_user "Select log mode [1-6]: " "1" log_choice
+
+    case $log_choice in
+        1) $DOCKER_COMPOSE_CMD logs -f ;;
+        2) echo "Filtering for errors... (Ctrl+C to stop)"
+           $DOCKER_COMPOSE_CMD logs -f | grep --line-buffered -iE "error|exception|traceback|failed|invalid|import" ;;
+        3) $DOCKER_COMPOSE_CMD logs -f backend ;;
+        4) $DOCKER_COMPOSE_CMD logs -f frontend ;;
+        5) $DOCKER_COMPOSE_CMD logs -f db ;;
+        *) return ;;
+    esac
+}
+
+check_status_and_diagnostics() {
     echo ""
     echo "--- System Status & Diagnostics ---"
     if [ -z "$DOCKER_COMPOSE_CMD" ]; then
@@ -94,35 +116,32 @@ check_status_and_logs() {
     $DOCKER_COMPOSE_CMD ps
     
     echo ""
-    echo "--- Recent Backend Logs ---"
-    $DOCKER_COMPOSE_CMD logs --tail=30 backend || echo "Failed to get backend logs."
+    echo "--- Recent Backend Activity ---"
+    $DOCKER_COMPOSE_CMD logs --tail=20 backend || echo "Failed to get backend logs."
     
-    echo ""
-    echo "--- Recent Database Logs ---"
-    $DOCKER_COMPOSE_CMD logs --tail=30 db || echo "Failed to get database logs."
-
     echo ""
     echo "--- Connectivity Check ---"
     echo "Waiting for API to respond (up to 60s)..."
+    local healthy=false
     for i in {1..12}; do
         if curl -s http://localhost:8000/health | grep -q "ok"; then
             echo "[OK] Backend API is reachable and healthy."
+            healthy=true
             break
         fi
-
         echo "  Attempt $i/12: Still waiting..."
         sleep 5
     done
-    echo "[ERROR] Backend API is NOT responding on http://localhost:8000/health"
-    echo "Check logs above for errors during startup."
+
+    if [ "$healthy" = false ]; then
+        echo "[ERROR] Backend API is NOT responding on http://localhost:8000/health"
+        echo "Common causes: Container crashing, firewall blocking port 8000, or slow startup."
+    fi
 
     echo ""
-    prompt_user "Follow live logs? (1=All, 2=Errors Only, N=Skip): " "n" follow_logs
-    if [ "$follow_logs" == "1" ]; then
-        $DOCKER_COMPOSE_CMD logs -f
-    elif [ "$follow_logs" == "2" ]; then
-        echo "Monitoring for Errors (Press Ctrl+C to stop)..."
-        $DOCKER_COMPOSE_CMD logs -f | grep --line-buffered -iE "error|exception|traceback|failed|invalid|import"
+    prompt_user "Would you like to follow live logs now? (y/N): " "n" show_live
+    if [[ "$show_live" =~ ^[Yy]$ ]]; then
+        view_live_logs
     fi
 }
 
@@ -192,7 +211,7 @@ EOF
         prompt_user "Rebuild and restart containers to apply changes? (y/N): " "n" restart
         if [[ "$restart" =~ ^[Yy]$ ]]; then
             $DOCKER_COMPOSE_CMD up -d --build --force-recreate
-            check_status_and_logs
+            check_status_and_diagnostics
         fi
         create_admin_user
     fi
@@ -235,7 +254,7 @@ update_app() {
     if [ -n "$DOCKER_COMPOSE_CMD" ]; then
         echo "Rebuilding and restarting..."
         $DOCKER_COMPOSE_CMD up -d --build --force-recreate
-        check_status_and_logs
+        check_status_and_diagnostics
         create_admin_user
     else
         echo "Update complete. (Docker Compose not found)"
@@ -307,7 +326,7 @@ install_app() {
         if [ -n "$DOCKER_COMPOSE_CMD" ]; then
             $DOCKER_COMPOSE_CMD up -d --build --force-recreate
             sleep 10
-            check_status_and_logs
+            check_status_and_diagnostics
             create_admin_user
             echo "Started! Frontend: http://localhost:3000 | Backend: http://localhost:8000"
         fi
@@ -326,16 +345,18 @@ if [ "$IS_INSTALLED" = true ]; then
     echo "Existing installation detected."
     echo "1) Update (Rebuild containers)"
     echo "2) Reconfigure (.env & Admin user)"
-    echo "3) Check Status & Logs"
-    echo "4) Uninstall"
-    echo "5) Exit"
-    prompt_user "Select option [1-5]: " "5" choice
+    echo "3) Check Status & Diagnostics"
+    echo "4) View Live Logs"
+    echo "5) Uninstall"
+    echo "6) Exit"
+    prompt_user "Select option [1-6]: " "6" choice
 
     case $choice in
         1) update_app ;;
         2) reconfigure ;;
-        3) check_status_and_logs ;;
-        4) uninstall_app ;;
+        3) check_status_and_diagnostics ;;
+        4) view_live_logs ;;
+        5) uninstall_app ;;
         *) exit 0 ;;
     esac
 else
