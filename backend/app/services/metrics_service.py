@@ -19,6 +19,7 @@ class MetricsService:
         uptime_seconds = 0
         
         try:
+            # Load Average
             load_match = re.search(r"load average:\s+([\d.]+),\s+([\d.]+),\s+([\d.]+)", text)
             if load_match:
                 load_avg = {
@@ -27,13 +28,47 @@ class MetricsService:
                     "15m": float(load_match.group(3))
                 }
             
-            if "up" in text:
-                # Simple placeholder
-                uptime_seconds = 3600
+            # Uptime (e.g., "up 2 days, 14:35")
+            up_match = re.search(r"up\s+(.*?),\s+\d+:\d+", text)
+            if up_match:
+                uptime_str = up_match.group(1)
+                if "day" in uptime_str:
+                    days = int(re.search(r"(\d+)", uptime_str).group(1))
+                    uptime_seconds += days * 86400
+            
+            time_match = re.search(r"(\d+):(\d+)(?::(\d+))?", text)
+            if time_match:
+                h = int(time_match.group(1))
+                m = int(time_match.group(2))
+                uptime_seconds += (h * 3600) + (m * 60)
         except:
             pass
             
         return uptime_seconds, load_avg
+
+    @staticmethod
+    def parse_legacy_memory(text: str):
+        """Parse memory usage percentage from 'show system memory' output."""
+        try:
+            # Total: 2048 MB, Used: 512 MB
+            total_match = re.search(r"Total:\s+(\d+)", text)
+            used_match = re.search(r"Used:\s+(\d+)", text)
+            if total_match and used_match:
+                total = float(total_match.group(1))
+                used = float(used_match.group(1))
+                if total > 0:
+                    return round((used / total) * 100, 1)
+            
+            # Fallback for alternative format: Mem: 2048 512 ...
+            parts = text.split()
+            if "Mem:" in parts:
+                idx = parts.index("Mem:")
+                total = float(parts[idx+1])
+                used = float(parts[idx+2])
+                return round((used / total) * 100, 1)
+        except:
+            pass
+        return 0.0
 
     @staticmethod
     def parse_legacy_storage(text: str):
@@ -136,8 +171,9 @@ class MetricsService:
                         up_text = await client.get_legacy_system_stats()
                         uptime, load_avg = MetricsService.parse_legacy_uptime(up_text)
                         cpu_usage = load_avg["1m"]
+                        
                         mem_text = await client.get_legacy_memory_stats()
-                        # Simple parsing could go here
+                        memory_usage = MetricsService.parse_legacy_memory(mem_text)
                     except: pass
 
                 # 3. Disk Usage (Always legacy/CLI)
