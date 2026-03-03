@@ -84,7 +84,7 @@ DOCKER_COMPOSE_CMD=$(detect_docker_compose)
 
 check_status_and_logs() {
     echo ""
-    echo "--- System Status & Logs ---"
+    echo "--- System Status & Diagnostics ---"
     if [ -z "$DOCKER_COMPOSE_CMD" ]; then
         echo "Error: Docker Compose not found."
         return
@@ -94,17 +94,31 @@ check_status_and_logs() {
     $DOCKER_COMPOSE_CMD ps
     
     echo ""
-    prompt_user "Would you like to see the last 20 lines of backend logs? (y/N): " "n" show_logs
-    if [[ "$show_logs" =~ ^[Yy]$ ]]; then
-        echo "--- Backend Logs ---"
-        $DOCKER_COMPOSE_CMD logs --tail=20 backend
+    echo "Gathering last 30 lines of Backend logs..."
+    echo "----------------------------------------"
+    $DOCKER_COMPOSE_CMD logs --tail=30 backend || echo "Failed to get backend logs."
+    echo "----------------------------------------"
+
+    echo ""
+    echo "Gathering last 30 lines of Database logs..."
+    echo "----------------------------------------"
+    $DOCKER_COMPOSE_CMD logs --tail=30 db || echo "Failed to get database logs."
+    echo "----------------------------------------"
+
+    echo ""
+    echo "Diagnostic Check: Connectivity"
+    if curl -s -I http://localhost:8000/health | grep -q "200 OK"; then
+        echo "[OK] Backend API is reachable and healthy."
+    else
+        echo "[ERROR] Backend API is NOT responding on http://localhost:8000/health"
+        echo "Check if the port is blocked or if the container is crashing (see logs above)."
     fi
 
     echo ""
-    prompt_user "Would you like to see the last 20 lines of database logs? (y/N): " "n" show_db_logs
-    if [[ "$show_db_logs" =~ ^[Yy]$ ]]; then
-        echo "--- Database Logs ---"
-        $DOCKER_COMPOSE_CMD logs --tail=20 db
+    prompt_user "Save all logs to 'debug_logs.txt'? (y/N): " "n" save_logs
+    if [[ "$save_logs" =~ ^[Yy]$ ]]; then
+        $DOCKER_COMPOSE_CMD logs > debug_logs.txt
+        echo "Logs saved to debug_logs.txt"
     fi
 
     echo ""
@@ -130,7 +144,7 @@ create_admin_user() {
         BACKEND_CONTAINER=$(docker ps --format "{{.Names}}" | grep "backend" | head -n 1)
         if [ -n "$BACKEND_CONTAINER" ]; then
             docker exec -i "$BACKEND_CONTAINER" python app/create_first_user.py "$ADMIN_EMAIL" "$ADMIN_PASSWORD" "$ADMIN_NAME" "admin" || \
-            echo "Failed to create user. Please check container logs: $DOCKER_COMPOSE_CMD logs backend"
+            echo "Failed to create user. Please check container logs."
         else
             echo "Error: Backend container not found. Is the app running?"
         fi
@@ -141,7 +155,6 @@ reconfigure() {
     echo ""
     echo "--- Reconfiguration ---"
     
-    # Try to guess the external API URL
     PUBLIC_IP=$(get_public_ip)
     DEFAULT_API_URL="http://${PUBLIC_IP}:8000"
 
@@ -155,30 +168,22 @@ reconfigure() {
 
     GENERATED_KEY=$(generate_secret_key)
     prompt_user "Secret Key (press Enter to use generated): " "$GENERATED_KEY" SECRET_KEY
-    prompt_user "Backend CORS Origins (Comma separated IPs/Domains) [http://localhost:3000,http://localhost:8000,http://${PUBLIC_IP}:3000]: " "http://localhost:3000,http://localhost:8000,http://${PUBLIC_IP}:3000" BACKEND_CORS_ORIGINS
+    prompt_user "Backend CORS Origins (Comma separated) [http://localhost:3000,http://localhost:8000,http://${PUBLIC_IP}:3000]: " "http://localhost:3000,http://localhost:8000,http://${PUBLIC_IP}:3000" BACKEND_CORS_ORIGINS
     prompt_user "Next Public API URL [${DEFAULT_API_URL}]: " "$DEFAULT_API_URL" NEXT_PUBLIC_API_URL
     prompt_user "Redis URL [redis://redis:6379/0]: " "redis://redis:6379/0" REDIS_URL
 
     DATABASE_URL="postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@${POSTGRES_SERVER}:5432/${POSTGRES_DB}"
 
-    # Generate .env file without single quotes around values
     cat << EOF > .env
-# Project Settings
 PROJECT_NAME=${PROJECT_NAME}
 SECRET_KEY=${SECRET_KEY}
-
-# Database Settings
 POSTGRES_SERVER=${POSTGRES_SERVER}
 POSTGRES_USER=${POSTGRES_USER}
 POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
 POSTGRES_DB=${POSTGRES_DB}
 DATABASE_URL=${DATABASE_URL}
-
-# Backend Settings
 BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS}
 REDIS_URL=${REDIS_URL}
-
-# Frontend Settings
 NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
 EOF
 
@@ -205,57 +210,51 @@ update_app() {
         return
     fi
 
-    # Always preserve backend/.env — it holds real DB credentials and the secret key
     [ -f "backend/.env" ] && cp backend/.env /tmp/vyos_backend_env_backup
 
-    # Migration: if backend/.env is still tracked by git, remove it from the index
     if git ls-files --error-unmatch backend/.env >/dev/null 2>&1; then
-        echo "Note: Removing backend/.env from git tracking (settings preserved)..."
+        echo "Note: Removing backend/.env from git tracking..."
         git checkout -- backend/.env
         git rm --cached backend/.env
     fi
 
-    echo "Pulling latest changes from repository..."
+    echo "Pulling latest changes..."
     git fetch origin
 
     git diff --name-only HEAD FETCH_HEAD 2>/dev/null | while IFS= read -r f; do
         if [ -f "$f" ] && ! git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
-            echo "  Clearing untracked file for update: $f"
             rm -f "$f"
         fi
     done
 
     git merge FETCH_HEAD
 
-    # Restore actual backend configuration after merge
     if [ -f /tmp/vyos_backend_env_backup ]; then
         cp /tmp/vyos_backend_env_backup backend/.env
         rm -f /tmp/vyos_backend_env_backup
-        echo "Backend configuration restored."
     fi
 
     if [ -n "$DOCKER_COMPOSE_CMD" ]; then
-        echo "Rebuilding and restarting containers..."
+        echo "Rebuilding and restarting..."
         $DOCKER_COMPOSE_CMD up -d --build --force-recreate
         check_status_and_logs
         create_admin_user
     else
-        echo "Update complete. (Docker Compose not found, please restart manually)"
+        echo "Update complete. (Docker Compose not found)"
     fi
     echo "Update finished successfully."
 }
 
 uninstall_app() {
     echo ""
-    echo "--- Uninstalling VyOS UI Manager ---"
-    prompt_user "Are you SURE you want to uninstall? This will stop all containers. (y/N): " "n" confirm
+    echo "--- Uninstalling ---"
+    prompt_user "Are you SURE you want to uninstall? (y/N): " "n" confirm
     if [[ ! "$confirm" =~ ^[Yy]$ ]]; then
-        echo "Uninstall cancelled."
         return
     fi
 
     if [ -n "$DOCKER_COMPOSE_CMD" ]; then
-        prompt_user "Do you want to delete all database volumes? (CAUTION: Data will be lost) (y/N): " "n" del_volumes
+        prompt_user "Delete all database volumes? (y/N): " "n" del_volumes
         if [[ "$del_volumes" =~ ^[Yy]$ ]]; then
             $DOCKER_COMPOSE_CMD down -v
         else
@@ -263,14 +262,10 @@ uninstall_app() {
         fi
     fi
 
-    echo "Removing installation directory..."
     cd ..
     if [[ "$(basename "$PWD")" != "vyosdashy" ]]; then
         rm -rf vyosdashy
-        echo "VyOS UI Manager has been uninstalled."
         exit 0
-    else
-        echo "Error: Could not determine directory safety. Please delete the 'vyosdashy' folder manually."
     fi
 }
 
@@ -282,7 +277,6 @@ install_app() {
         if [ -d "vyosdashy" ]; then
             cd vyosdashy
         else
-            echo "Cloning repository..."
             git clone https://github.com/tahasaifeee/vyosdashy.git vyosdashy
             cd vyosdashy
         fi
@@ -290,45 +284,34 @@ install_app() {
 
     reconfigure
 
-    prompt_user "Do you want to start the application with docker? (y/N): " "n" run_docker
+    prompt_user "Start application with docker? (y/N): " "n" run_docker
     if [[ "$run_docker" =~ ^[Yy]$ ]]; then
         if ! command -v docker >/dev/null 2>&1; then
-            prompt_user "Docker not found. Install it? (y/N): " "n" inst_docker
-            if [[ "$inst_docker" =~ ^[Yy]$ ]]; then
-                curl -fsSL https://get.docker.com | sh
-                if command -v systemctl >/dev/null 2>&1; then
-                    sudo systemctl start docker
-                    sudo systemctl enable docker
-                fi
+            curl -fsSL https://get.docker.com | sh
+            if command -v systemctl >/dev/null 2>&1; then
+                sudo systemctl start docker
+                sudo systemctl enable docker
             fi
         fi
 
         DOCKER_COMPOSE_CMD=$(detect_docker_compose)
         if [ -z "$DOCKER_COMPOSE_CMD" ]; then
-            prompt_user "Docker Compose not found. Install it? (y/N): " "n" inst_compose
-            if [[ "$inst_compose" =~ ^[Yy]$ ]]; then
-                if command -v apt-get >/dev/null 2>&1; then
-                    sudo apt-get update && sudo apt-get install -y docker-compose-plugin
-                    DOCKER_COMPOSE_CMD="docker compose"
-                else
-                    sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-                    sudo chmod +x /usr/local/bin/docker-compose
-                    DOCKER_COMPOSE_CMD="docker-compose"
-                fi
+            if command -v apt-get >/dev/null 2>&1; then
+                sudo apt-get update && sudo apt-get install -y docker-compose-plugin
+                DOCKER_COMPOSE_CMD="docker compose"
+            else
+                sudo curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+                sudo chmod +x /usr/local/bin/docker-compose
+                DOCKER_COMPOSE_CMD="docker-compose"
             fi
         fi
 
         if [ -n "$DOCKER_COMPOSE_CMD" ]; then
             $DOCKER_COMPOSE_CMD up -d --build --force-recreate
-            echo "Waiting for database to initialize..."
             sleep 10
             check_status_and_logs
             create_admin_user
-            echo "Application started!"
-            echo "Frontend: http://localhost:3000"
-            echo "Backend: http://localhost:8000"
-        else
-            echo "Installation finished, but Docker Compose is missing. Start it manually when ready."
+            echo "Started! Frontend: http://localhost:3000 | Backend: http://localhost:8000"
         fi
     fi
 }
@@ -338,20 +321,17 @@ install_app() {
 IS_INSTALLED=false
 if [ -d ".git" ] || ([ -d "vyosdashy" ] && [ -d "vyosdashy/.git" ]); then
     IS_INSTALLED=true
+    if [ ! -d ".git" ]; then cd vyosdashy; fi
 fi
 
 if [ "$IS_INSTALLED" = true ]; then
-    if [ ! -d ".git" ] && [ -d "vyosdashy" ]; then
-        cd vyosdashy
-    fi
-
     echo "Existing installation detected."
-    echo "1) Update (Pull latest code and rebuild)"
-    echo "2) Reconfigure (Update .env settings and Admin user)"
+    echo "1) Update (Rebuild containers)"
+    echo "2) Reconfigure (.env & Admin user)"
     echo "3) Check Status & Logs"
-    echo "4) Uninstall (Stop and remove everything)"
+    echo "4) Uninstall"
     echo "5) Exit"
-    prompt_user "Select an option [1-5]: " "5" choice
+    prompt_user "Select option [1-5]: " "5" choice
 
     case $choice in
         1) update_app ;;
