@@ -14,7 +14,7 @@ from app.models.router import Router, RouterStatus
 from app.models.user import User
 from app.schemas.router import Router as RouterSchema, RouterCreate, RouterUpdate
 from app.services.vyos import VyOSClient
-from app.main import InfoQueryParams
+from app.schemas.info import InfoQueryParams
 
 router = APIRouter()
 

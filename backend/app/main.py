@@ -4,13 +4,14 @@ from fastapi.responses import JSONResponse
 import asyncio
 from contextlib import asynccontextmanager
 from typing import Optional, Dict, Any
-from pydantic import BaseModel, ValidationError, field_validator
+from pydantic import ValidationError
 
 from app.core.config import settings
 from app.api.api import api_router
 from app.services.metrics_service import run_metrics_collector
 from sqlalchemy import text
 from app.core.database import Base, engine
+from app.schemas.info import InfoQueryParams
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -60,24 +61,6 @@ def health_check():
     return {"status": "ok"}
 
 # ── VyOS-Compliant /info Implementation ──────────────────────────────────────
-
-class InfoQueryParams(BaseModel):
-    version: str = "true"
-    hostname: str = "true"
-
-    class Config:
-        extra = "forbid"
-
-    @field_validator("version", "hostname", mode="before")
-    @classmethod
-    def validate_vyos_bool(cls, v: Any) -> str:
-        s = str(v).lower()
-        if s in ("1", "true", "yes", "on"):
-            return "true"
-        if s in ("0", "false", "no", "off"):
-            return "false"
-        # Exact error message pattern from VyOS docs
-        raise ValueError(f"Input should be a valid boolean, unable to interpret input")
 
 @app.get("/info")
 async def get_service_info(request: Request):
