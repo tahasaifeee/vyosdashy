@@ -1,21 +1,37 @@
 import httpx
 import json
 import re
+import asyncio
 from typing import Any, Dict, List, Optional
+from pyvyos import Client
 
 
 class VyOSClient:
     def __init__(self, hostname: str, api_key: str, port: int = 443, protocol: str = "https"):
         # Sanitize hostname (remove http/https and trailing paths)
-        clean_hostname = hostname.replace("https://", "").replace("http://", "").split("/")[0].split(":")[0]
-        self.base_url = f"{protocol}://{clean_hostname}:{port}"
+        self.hostname = hostname.replace("https://", "").replace("http://", "").split("/")[0].split(":")[0]
+        self.port = port
+        self.protocol = protocol
+        self.base_url = f"{protocol}://{self.hostname}:{port}"
         self.api_key = api_key
         self.verify = False  # VyOS typically uses self-signed certs
+        
+        # Initialize pyvyos Client
+        self.client = Client(
+            hostname=self.hostname,
+            apikey=self.api_key,
+            port=self.port,
+            protocol=self.protocol,
+            verify=self.verify
+        )
 
     # ── Low-level request helpers ──────────────────────────────────────────────
 
     async def _post_form(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
-        """POST to a REST endpoint using form-data (key + JSON data field)."""
+        """
+        Legacy POST helper. 
+        Note: pyvyos handles most of these now via specific methods.
+        """
         url = f"{self.base_url}/{endpoint}"
         payload = {
             "key": self.api_key,
@@ -44,10 +60,32 @@ class VyOSClient:
         except Exception as e:
             return {"errors": [{"message": str(e)}]}
 
+    # ── Config Retrieval (REST) ──────────────────────────────────────────────
+
     async def get_config(self, path: List[str] = []) -> Dict[str, Any]:
-        return await self._post_form("retrieve", {"op": "showConfig", "path": path})
+        """Retrieve configuration using pyvyos."""
+        try:
+            # pyvyos retrieve is synchronous, wrap in thread
+            result = await asyncio.to_thread(self.client.retrieve, path)
+            return {"success": True, "data": result}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def show_text(self, path: List[str]) -> str:
+        """Show operational data using pyvyos."""
+        try:
+            result = await asyncio.to_thread(self.client.show, path)
+            return str(result)
+        except Exception as e:
+            return f"Error: {str(e)}"
+
+    # ── Info & Connection ──────────────────────────────────────────────────
 
     async def get_info(self, version: bool = True, hostname: bool = True) -> Dict[str, Any]:
+        """
+        Custom endpoint /info is not in pyvyos yet. 
+        Maintaining manual httpx implementation.
+        """
         params = {
             "version": "1" if version else "0",
             "hostname": "1" if hostname else "0"
@@ -95,16 +133,13 @@ class VyOSClient:
         return info
 
     async def test_connection(self) -> Dict[str, Any]:
+        """Test connection by retrieving hostname."""
         res = await self.get_config(["system", "host-name"])
         if res.get("success") is True:
             return {"success": True}
         return {"success": False, "error": str(res.get("error") or "Unknown API error")}
 
-    async def show_text(self, path: List[str]) -> str:
-        result = await self._post_form("show", {"op": "show", "path": path})
-        if result.get("success"):
-            return result.get("data", "")
-        return f"Error: {result.get('error', 'unknown')}"
+    # ── High-level Metrics (GraphQL & Fallbacks) ───────────────────────────
 
     async def get_interface_config(self) -> Dict[str, Any]:
         return await self.get_config(["interfaces"])
@@ -145,6 +180,8 @@ class VyOSClient:
         if "errors" in result: return None
         return result.get("data", {}).get("ShowSystemInformation", {}).get("result")
 
+    # ── Legacy CLI Fallbacks (using pyvyos show) ───────────────────────────
+
     async def get_legacy_system_stats(self) -> str:
         return await self.show_text(["system", "uptime"])
 
@@ -159,6 +196,8 @@ class VyOSClient:
 
     async def get_legacy_interface_counters(self) -> str:
         return await self.show_text(["interfaces", "counters"])
+
+    # ── Advanced Data ─────────────────────────────────────────────────────
 
     async def get_routing_table(self) -> Optional[List[Dict[str, Any]]]:
         result = await self._graphql("""
@@ -192,11 +231,36 @@ class VyOSClient:
     async def ping(self, host: str, count: int = 4) -> str:
         return await self.show_text(["ping", host, "count", str(count)])
 
+    # ── Configuration Management (Write) ─────────────────────────────────
+
     async def set_config(self, path: List[str]) -> Dict[str, Any]:
-        return await self._post_form("configure", {"op": "set", "path": path})
+        """Write configuration using pyvyos."""
+        try:
+            await asyncio.to_thread(self.client.set, path)
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     async def delete_config(self, path: List[str]) -> Dict[str, Any]:
-        return await self._post_form("configure", {"op": "delete", "path": path})
+        """Delete configuration using pyvyos."""
+        try:
+            await asyncio.to_thread(self.client.delete, path)
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+    async def commit(self) -> Dict[str, Any]:
+        """Commit changes using pyvyos."""
+        try:
+            await asyncio.to_thread(self.client.commit)
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
 
     async def save(self) -> Dict[str, Any]:
-        return await self._post_form("config-file", {"op": "save"})
+        """Save configuration using pyvyos."""
+        try:
+            await asyncio.to_thread(self.client.save)
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}
