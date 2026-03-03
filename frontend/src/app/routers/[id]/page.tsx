@@ -588,16 +588,6 @@ export default function RouterDashboard() {
                   </div>
 
                   <div className="space-y-8">
-                    {/* Protocols Panel */}
-                    <DashboardCard title="Protocol Control Center">
-                      <div className="space-y-3 mt-6">
-                        <ProtocolRow label="BGP Routing" active={configStatus?.bgp} detail={`${configStatus?.bgpPeers} Active`} />
-                        <ProtocolRow label="OSPF OSPFv2" active={configStatus?.ospf} detail={`${configStatus?.ospfNeighbors} Neighbors`} />
-                        <ProtocolRow label="IPv4 Firewall" active={configStatus?.firewall} detail={`${configStatus?.fwPolicies} Polices`} />
-                        <ProtocolRow label="WireGuard" active={configStatus?.wireguard} detail={`${configStatus?.wgPeers} Peers`} />
-                      </div>
-                    </DashboardCard>
-
                     {/* Quick Actions */}
                     <div className="bg-primary/5 dark:bg-primary/10 border border-primary/20 rounded-3xl p-6 relative overflow-hidden group">
                       <div className="absolute -right-4 -top-4 bg-primary/20 w-24 h-24 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700" />
