@@ -375,19 +375,6 @@ export default function RouterDashboard() {
             </div>
 
             <div className="space-y-8">
-              {/* Category: Security */}
-              <div>
-                <SidebarCategory label="Security & VPN" />
-                <div className="mt-2 space-y-1">
-                  <SidebarItem 
-                    active={activeTab === 'vpn'} 
-                    onClick={() => setActiveTab('vpn')} 
-                    icon={<Lock className="w-4 h-4" />} 
-                    label="VPN Gateway" 
-                  />
-                </div>
-              </div>
-
               {/* Category: Monitor */}
               <div>
                 <SidebarCategory label="Monitor" />
@@ -583,18 +570,6 @@ export default function RouterDashboard() {
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                   <div className="lg:col-span-2 space-y-8">
-                    {/* VPN Gateway */}
-                    <DashboardCard title="VPN Control Gateway">
-                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mt-6">
-                        <ProtocolRow label="IPsec VPN" active={configStatus?.vpn?.ipsec} detail="Secure Tunnel" />
-                        <ProtocolRow label="L2TP Remote" active={configStatus?.vpn?.l2tp} detail="Client Access" />
-                        <ProtocolRow label="OpenConnect" active={configStatus?.vpn?.openconnect} detail="SSL VPN" />
-                        <ProtocolRow label="PPTP Server" active={configStatus?.vpn?.pptp} detail="Legacy Access" />
-                        <ProtocolRow label="SSTP Server" active={configStatus?.vpn?.sstp} detail="Windows VPN" />
-                        <ProtocolRow label="RSA Keys" active={configStatus?.vpn?.rsa} detail="Auth Assets" />
-                      </div>
-                    </DashboardCard>
-
                     {/* Traffic Chart */}
                     <DashboardCard 
                       title="Throughput Monitor (Mbps)" 
@@ -678,6 +653,50 @@ export default function RouterDashboard() {
                   </div>
                 ) : (
                   <div className="mt-6 animate-in fade-in duration-500">
+                    {activeTab === 'vpn' && (
+                      <div className="space-y-8">
+                        <div className="bg-primary/5 dark:bg-primary/10 border border-primary/20 rounded-3xl p-8 relative overflow-hidden group">
+                          <div className="absolute -right-10 -top-10 bg-primary/20 w-40 h-40 rounded-full blur-3xl group-hover:scale-150 transition-transform duration-700" />
+                          <div className="flex items-center gap-4 mb-8">
+                            <div className="bg-primary text-white p-3 rounded-2xl shadow-glow">
+                              <Lock className="w-6 h-6" />
+                            </div>
+                            <div>
+                              <h4 className="text-xl font-black text-slate-900 dark:text-white tracking-tight">VPN Stack Status</h4>
+                              <p className="text-xs font-bold text-slate-500 uppercase tracking-widest">Global Gateway Control</p>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative z-10">
+                            <ProtocolRow label="IPsec VPN" active={configStatus?.vpn?.ipsec} detail="Secure Tunnel" />
+                            <ProtocolRow label="L2TP Remote" active={configStatus?.vpn?.l2tp} detail="Client Access" />
+                            <ProtocolRow label="OpenConnect" active={configStatus?.vpn?.openconnect} detail="SSL VPN" />
+                            <ProtocolRow label="PPTP Server" active={configStatus?.vpn?.pptp} detail="Legacy Access" />
+                            <ProtocolRow label="SSTP Server" active={configStatus?.vpn?.sstp} detail="Windows VPN" />
+                            <ProtocolRow label="RSA Keys" active={configStatus?.vpn?.rsa} detail="Auth Assets" />
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                          <div className="bg-white dark:bg-white/5 p-6 rounded-3xl border border-slate-200 dark:border-white/10">
+                            <h5 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest mb-4 flex items-center gap-2">
+                              <Fingerprint className="w-4 h-4 text-primary" /> Identity & Keys
+                            </h5>
+                            <div className="space-y-4">
+                              <DetailRow label="RSA Keys" value={configStatus?.vpn?.rsa ? 'Configured' : 'Missing'} highlight={configStatus?.vpn?.rsa} />
+                              <DetailRow label="Local ID" value={routerInfo?.hostname || 'N/A'} mono />
+                            </div>
+                          </div>
+                          <div className="bg-white dark:bg-white/5 p-6 rounded-3xl border border-slate-200 dark:border-white/10">
+                            <h5 className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-widest mb-4 flex items-center gap-2">
+                              <ShieldAlert className="w-4 h-4 text-warning" /> Security Context
+                            </h5>
+                            <p className="text-xs text-slate-500 leading-relaxed">
+                              All VPN services are monitored for state changes. Ensure firewall rules allow the respective protocol ports (UDP 500/4500 for IPsec, TCP 443 for SSL VPNs).
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
                     {activeTab === 'bgp' && (
                       <div className="overflow-x-auto">
                         <table className="w-full text-left">
