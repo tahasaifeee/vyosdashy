@@ -116,9 +116,12 @@ check_status_and_logs() {
     echo "Check logs above for errors during startup."
 
     echo ""
-    prompt_user "Follow live logs? (Ctrl+C to stop) (y/N): " "n" follow_logs
-    if [[ "$follow_logs" =~ ^[Yy]$ ]]; then
+    prompt_user "Follow live logs? (1=All, 2=Errors Only, N=Skip): " "n" follow_logs
+    if [ "$follow_logs" == "1" ]; then
         $DOCKER_COMPOSE_CMD logs -f
+    elif [ "$follow_logs" == "2" ]; then
+        echo "Monitoring for Errors (Press Ctrl+C to stop)..."
+        $DOCKER_COMPOSE_CMD logs -f | grep --line-buffered -iE "error|exception|traceback|failed|invalid|import"
     fi
 }
 
