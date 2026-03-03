@@ -10,7 +10,7 @@ import {
   Maximize2, Layers, Monitor, HardDriveDownload, Download, Settings2, Check,
   LayoutDashboard, FileText, ActivitySquare, Shield, Menu, X as CloseIcon,
   Play, Save, Globe2, Fingerprint, ShieldAlert, Radar, ScanSearch,
-  ShieldCheck, ShieldHalf, Trash2, Plus, ChevronDown, ChevronUp, List
+  ShieldCheck, ShieldHalf, Trash2, Plus, ChevronDown, ChevronUp, List, Terminal
 } from 'lucide-react';
 import Navbar from '@/components/Navbar';
 import { DashboardSkeleton } from '@/components/Skeleton';
