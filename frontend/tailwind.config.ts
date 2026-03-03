@@ -9,46 +9,59 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['var(--font-exo2)', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono)', 'Menlo', 'Consolas', 'monospace'],
+      },
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
         primary: {
-          DEFAULT: "#6366f1", // Indigo 500
-          hover: "#4f46e5",   // Indigo 600
-          dark: "#4338ca",    // Indigo 700
+          DEFAULT: "#00d4ff",
+          hover: "#00b8e0",
         },
-        surface: {
-          DEFAULT: "rgba(255, 255, 255, 0.05)",
-          hover: "rgba(255, 255, 255, 0.1)",
-          active: "rgba(255, 255, 255, 0.15)",
-        },
-        success: "#10b981", // Emerald 500
-        warning: "#f59e0b", // Amber 500
-        danger: "#ef4444",  // Red 500
-        info: "#0ea5e9",    // Sky 500
+        success: "#22c55e",
+        warning: "#f59e0b",
+        danger: "#f43f5e",
+        info: "#0ea5e9",
         dark: {
-          900: "#020617", // Slate 950
-          800: "#0f172a", // Slate 900
-          700: "#1e293b", // Slate 800
-          600: "#334155", // Slate 700
-        }
-      },
-      borderRadius: {
-        'xl': '16px',
-        '2xl': '20px',
-        '3xl': '24px',
+          950: "#060810",
+          900: "#0a0e18",
+          800: "#0d1220",
+          700: "#141929",
+          600: "#1c2436",
+          500: "#2a3450",
+        },
       },
       boxShadow: {
-        'glass': '0 8px 32px 0 rgba(0, 0, 0, 0.37)',
-        'glow': '0 0 15px rgba(99, 102, 241, 0.3)',
+        'glow': '0 0 20px rgba(0, 212, 255, 0.25), 0 0 60px rgba(0, 212, 255, 0.07)',
+        'glow-sm': '0 0 10px rgba(0, 212, 255, 0.18)',
+        'card': '0 4px 32px rgba(0, 0, 0, 0.5)',
+        'led-online': '0 0 7px rgba(34, 197, 94, 0.85)',
+        'led-offline': '0 0 7px rgba(244, 63, 94, 0.7)',
       },
-      backgroundImage: {
-        'gradient-radial': 'radial-gradient(var(--tw-gradient-stops))',
-        'gradient-conic': 'conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))',
-        'dark-mesh': 'radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.15) 0, transparent 50%), radial-gradient(at 100% 0%, rgba(139, 92, 246, 0.15) 0, transparent 50%), radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.05) 0, transparent 50%), radial-gradient(at 0% 100%, rgba(239, 68, 68, 0.05) 0, transparent 50%)',
+      animation: {
+        'pulse-led': 'pulseLed 2.5s ease-in-out infinite',
+        'fade-up': 'fadeUp 0.4s ease both',
+        'slide-in': 'slideIn 0.25s ease both',
+      },
+      keyframes: {
+        pulseLed: {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.3' },
+        },
+        fadeUp: {
+          from: { opacity: '0', transform: 'translateY(10px)' },
+          to: { opacity: '1', transform: 'translateY(0)' },
+        },
+        slideIn: {
+          from: { opacity: '0', transform: 'translateX(-6px)' },
+          to: { opacity: '1', transform: 'translateX(0)' },
+        },
       },
     },
   },
   plugins: [],
 };
+
 export default config;

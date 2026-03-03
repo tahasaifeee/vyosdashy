@@ -3,10 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
-import { 
-  Plus, Router as RouterIcon, Signal, SignalLow, 
-  Trash2, RefreshCcw, MapPin, Activity, ChevronRight 
-} from 'lucide-react';
 import Navbar from '@/components/Navbar';
 
 interface Router {
@@ -19,13 +15,111 @@ interface Router {
   last_seen: string | null;
 }
 
+function RouterCard({
+  r,
+  index,
+  onTest,
+  onDelete,
+  onNavigate,
+}: {
+  r: Router;
+  index: number;
+  onTest: (id: number) => void;
+  onDelete: (id: number) => void;
+  onNavigate: (id: number) => void;
+}) {
+  const isOnline   = r.status === 'online';
+  const isOffline  = r.status === 'offline';
+  const statusKey  = isOnline ? 'status-online' : isOffline ? 'status-offline' : 'status-unknown';
+  const lastSeen   = r.last_seen
+    ? new Date(r.last_seen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    : 'Never';
+
+  return (
+    <div
+      className={`op-card flex flex-col ${statusKey}`}
+      style={{ animation: `fadeUp 0.4s ease ${index * 55}ms both` }}
+    >
+      {/* Card header */}
+      <div className="flex items-start justify-between px-5 pt-5 pb-4 border-b border-dark-700/60">
+        <div className="flex items-center gap-3 min-w-0">
+          <span
+            className={`led flex-shrink-0 ${
+              isOnline ? 'led-online' : isOffline ? 'led-offline' : 'led-unknown'
+            }`}
+          />
+          <div className="min-w-0">
+            <h3 className="font-bold text-sm text-white tracking-tight truncate">{r.name}</h3>
+            <div className="font-mono text-[10px] text-slate-600 mt-0.5 truncate">{r.hostname}</div>
+          </div>
+        </div>
+
+        <button
+          onClick={() => onDelete(r.id)}
+          className="text-slate-700 hover:text-danger transition-colors duration-150 p-1 ml-2 flex-shrink-0"
+          title="Remove router"
+        >
+          <svg width="13" height="13" viewBox="0 0 13 13" fill="none" aria-hidden="true">
+            <path d="M1 1L12 12M12 1L1 12" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+          </svg>
+        </button>
+      </div>
+
+      {/* Data rows */}
+      <div className="px-5 py-1 flex-1">
+        <div className="data-row">
+          <span className="data-label">Location</span>
+          <span className="data-value">{r.site || 'Remote'}</span>
+        </div>
+        <div className="data-row">
+          <span className="data-label">Status</span>
+          <span
+            className={`font-mono text-[10px] font-bold uppercase tracking-widest ${
+              isOnline ? 'text-success' : isOffline ? 'text-danger' : 'text-slate-600'
+            }`}
+          >
+            {r.status}
+          </span>
+        </div>
+        <div className="data-row" style={{ borderBottom: 'none' }}>
+          <span className="data-label">Last Seen</span>
+          <span className="data-value">{lastSeen}</span>
+        </div>
+      </div>
+
+      {/* Action bar */}
+      <div className="flex border-t border-dark-700 mt-2">
+        <button
+          onClick={() => onTest(r.id)}
+          className="flex-1 py-3 font-mono text-[10px] uppercase tracking-widest text-slate-600
+                     hover:text-primary hover:bg-primary/5 transition-all duration-150
+                     border-r border-dark-700"
+        >
+          Ping
+        </button>
+        <button
+          onClick={() => onNavigate(r.id)}
+          className="flex-1 py-3 font-mono text-[10px] uppercase tracking-widest text-primary
+                     hover:bg-primary/10 transition-all duration-150
+                     flex items-center justify-center gap-1.5"
+        >
+          Manage
+          <svg width="8" height="8" viewBox="0 0 8 8" fill="none" aria-hidden="true">
+            <path d="M1 4H7M7 4L4 1M7 4L4 7" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function RoutersPage() {
-  const [routers, setRouters] = useState<Router[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [routers, setRouters]         = useState<Router[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [submitting, setSubmitting]   = useState(false);
+  const [error, setError]             = useState<string | null>(null);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [newRouter, setNewRouter] = useState({ name: '', hostname: '', site: '', api_key: '' });
+  const [newRouter, setNewRouter]     = useState({ name: '', hostname: '', site: '', api_key: '' });
   const router = useRouter();
 
   const fetchRouters = async () => {
@@ -33,17 +127,13 @@ export default function RoutersPage() {
       const response = await api.get('/routers/');
       setRouters(response.data);
     } catch (err: any) {
-      if (err.response?.status === 401) {
-        router.push('/login');
-      }
+      if (err.response?.status === 401) router.push('/login');
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchRouters();
-  }, []);
+  useEffect(() => { fetchRouters(); }, []);
 
   const handleAddRouter = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,7 +160,7 @@ export default function RoutersPage() {
       } else {
         alert(`Router "${response.data.name}" is OFFLINE.\nError: ${response.data.error || 'Unknown'}`);
       }
-    } catch (err) {
+    } catch {
       alert('Failed to trigger connection test.');
     }
   };
@@ -80,190 +170,201 @@ export default function RoutersPage() {
     try {
       await api.delete(`/routers/${id}`);
       fetchRouters();
-    } catch (err) {
+    } catch {
       alert('Failed to delete router.');
     }
   };
 
+  const onlineCount = routers.filter((r) => r.status === 'online').length;
+
   return (
-    <div className="min-h-screen pt-24 pb-12 px-6 lg:px-12">
+    <div className="min-h-screen pt-20 pb-14 px-6 lg:px-10">
       <Navbar />
-      
-      <div className="max-w-7xl mx-auto">
-        <header className="flex flex-col md:flex-row md:items-end justify-between gap-6 mb-12">
+
+      <div className="max-w-6xl mx-auto">
+        {/* Page header */}
+        <header
+          className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pt-8 mb-8"
+          style={{ animation: 'fadeUp 0.4s ease both' }}
+        >
           <div>
-            <div className="flex items-center gap-3 mb-2">
-              <div className="bg-primary/10 p-2 rounded-lg">
-                <Activity className="w-5 h-5 text-primary" />
+            <div className="section-label mb-1.5">Infrastructure</div>
+            <h1 className="text-2xl font-bold text-white tracking-tight">
+              Router Registry<span className="text-primary">.</span>
+            </h1>
+            <div className="flex items-center gap-3 mt-2.5">
+              <div className="flex items-center gap-1.5">
+                <span className="led led-online" />
+                <span className="font-mono text-[10px] text-success">{onlineCount} online</span>
               </div>
-              <h1 className="text-3xl font-extrabold tracking-tight text-white">
-                Router <span className="text-primary">Registry</span>
-              </h1>
+              <span className="text-dark-600 font-mono text-xs">·</span>
+              <span className="font-mono text-[10px] text-slate-600">{routers.length} total</span>
             </div>
-            <p className="text-slate-400 font-medium">Monitoring and managing {routers.length} active instances.</p>
           </div>
+
           <button
             onClick={() => setShowAddModal(true)}
-            className="btn-primary flex items-center gap-2 group"
+            className="btn-primary flex items-center gap-2 self-start sm:self-auto"
           >
-            <Plus className="w-5 h-5 group-hover:rotate-90 transition-transform duration-300" />
-            Add New Router
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+              <path d="M5 1V9M1 5H9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+            Register Router
           </button>
         </header>
 
+        {/* Divider */}
+        <div
+          className="h-px mb-8"
+          style={{ background: 'linear-gradient(to right, rgba(0,212,255,0.3), rgba(20,25,41,0.5), transparent)' }}
+        />
+
+        {/* Content */}
         {loading ? (
-          <div className="flex flex-col items-center justify-center py-32 opacity-50">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
-            <p className="text-slate-400 font-medium">Syncing with registry...</p>
+          <div className="flex flex-col items-center justify-center py-36">
+            <div
+              className="w-8 h-8 rounded-full border border-dark-600 border-t-primary animate-spin mb-5"
+            />
+            <p className="font-mono text-[10px] text-slate-600 uppercase tracking-widest">
+              Syncing registry...
+            </p>
+          </div>
+        ) : routers.length === 0 ? (
+          <div
+            className="flex flex-col items-center justify-center py-36 text-center"
+            style={{ animation: 'fadeUp 0.4s ease both' }}
+          >
+            <div className="w-14 h-14 border border-dark-600 flex items-center justify-center mb-5">
+              <svg width="28" height="28" viewBox="0 0 28 28" fill="none" aria-hidden="true">
+                <rect x="2" y="10" width="24" height="8" rx="1" stroke="#2a3450" strokeWidth="1.5"/>
+                <circle cx="22" cy="14" r="1.5" fill="#2a3450"/>
+                <circle cx="18" cy="14" r="1.5" fill="#2a3450"/>
+              </svg>
+            </div>
+            <p className="font-bold text-slate-400 text-sm mb-1.5">No routers registered</p>
+            <p className="font-mono text-[10px] text-slate-600 uppercase tracking-widest">
+              Register your first VyOS instance to begin
+            </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {routers.map((r) => (
-              <div key={r.id} className="glass-card p-6 flex flex-col group">
-                <div className="flex justify-between items-start mb-6">
-                  <div className="flex items-center gap-4">
-                    <div className={`p-3 rounded-2xl ${
-                      r.status === 'online' ? 'bg-success/10 text-success' : 'bg-danger/10 text-danger'
-                    }`}>
-                      <RouterIcon className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-bold text-white group-hover:text-primary transition-colors">{r.name}</h3>
-                      <p className="text-sm text-slate-500 font-mono">{r.hostname}</p>
-                    </div>
-                  </div>
-                  <button 
-                    onClick={() => handleDeleteRouter(r.id)}
-                    className="p-2 text-slate-500 hover:text-danger hover:bg-danger/10 rounded-lg transition-all"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-
-                <div className="space-y-4 mb-8">
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2 text-slate-400">
-                      <MapPin className="w-4 h-4" />
-                      <span>Location</span>
-                    </div>
-                    <span className="text-slate-200 font-semibold">{r.site || 'Remote'}</span>
-                  </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <div className="flex items-center gap-2 text-slate-400">
-                      <Signal className="w-4 h-4" />
-                      <span>Status</span>
-                    </div>
-                    <div className={`status-badge ${
-                      r.status === 'online' ? 'bg-success/10 text-success border-success/20' : 'bg-danger/10 text-danger border-danger/20'
-                    }`}>
-                      <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${
-                        r.status === 'online' ? 'bg-success' : 'bg-danger'
-                      }`} />
-                      {r.status}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-auto flex gap-3">
-                  <button 
-                    onClick={() => testConnection(r.id)}
-                    className="flex-1 btn-secondary flex items-center justify-center gap-2 text-sm"
-                  >
-                    <RefreshCcw className="w-4 h-4" />
-                    Ping
-                  </button>
-                  <button 
-                    onClick={() => router.push(`/routers/${r.id}`)}
-                    className="flex-1 btn-primary flex items-center justify-center gap-2 text-sm group/btn"
-                  >
-                    Manage
-                    <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </button>
-                </div>
-              </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {routers.map((r, i) => (
+              <RouterCard
+                key={r.id}
+                r={r}
+                index={i}
+                onTest={testConnection}
+                onDelete={handleDeleteRouter}
+                onNavigate={(id) => router.push(`/routers/${id}`)}
+              />
             ))}
           </div>
         )}
+      </div>
 
-        {/* Add Router Modal */}
-        {showAddModal && (
-          <div className="fixed inset-0 bg-dark-900/80 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            <div className="glass-modal max-w-md w-full p-8">
-              <div className="flex items-center gap-3 mb-8">
-                <div className="bg-primary/20 p-2 rounded-lg">
-                  <Plus className="w-6 h-6 text-primary" />
-                </div>
-                <h2 className="text-2xl font-bold text-white">Register Router</h2>
+      {/* ── Add Router Modal ──────────────────────────── */}
+      {showAddModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: 'rgba(6,8,16,0.88)', backdropFilter: 'blur(4px)' }}
+        >
+          <div
+            className="op-panel w-full max-w-md overflow-hidden"
+            style={{ animation: 'fadeUp 0.3s ease both' }}
+          >
+            <div className="h-px bg-gradient-to-r from-transparent via-primary/50 to-transparent" />
+
+            <div className="flex items-center justify-between px-6 py-4 border-b border-dark-700">
+              <div>
+                <div className="section-label mb-0.5">New Device</div>
+                <h2 className="font-bold text-white text-sm">Register Router</h2>
               </div>
-              
+              <button
+                onClick={() => setShowAddModal(false)}
+                className="text-slate-600 hover:text-white transition-colors p-1"
+              >
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                  <path d="M1 1L13 13M13 1L1 13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
+                </svg>
+              </button>
+            </div>
+
+            <div className="p-6">
               {error && (
-                <div className="mb-6 p-4 bg-danger/10 border border-danger/20 text-danger text-sm rounded-xl font-medium">
-                  {error}
+                <div className="mb-5 flex items-start gap-2.5 px-3 py-2.5 bg-danger/5 border-l-2 border-danger">
+                  <span className="led led-offline mt-0.5 flex-shrink-0" />
+                  <p className="font-mono text-xs text-danger">{error}</p>
                 </div>
               )}
 
-              <form onSubmit={handleAddRouter} className="space-y-5">
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-400 uppercase tracking-wider ml-1">Friendly Name</label>
+              <form onSubmit={handleAddRouter} className="space-y-4">
+                <div>
+                  <label className="data-label block mb-1.5">Friendly Name</label>
                   <input
                     required
-                    className="w-full bg-dark-900/50 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-white placeholder:text-slate-600"
-                    placeholder="e.g. Core-Edge-01"
+                    className="input-field"
+                    placeholder="Core-Edge-01"
                     value={newRouter.name}
-                    onChange={(e) => setNewRouter({...newRouter, name: e.target.value})}
+                    onChange={(e) => setNewRouter({ ...newRouter, name: e.target.value })}
                   />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-400 uppercase tracking-wider ml-1">IP / Hostname</label>
+                <div>
+                  <label className="data-label block mb-1.5">IP / Hostname</label>
                   <input
                     required
-                    className="w-full bg-dark-900/50 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-white placeholder:text-slate-600"
+                    className="input-field"
                     placeholder="10.0.0.1 or vyos.local"
                     value={newRouter.hostname}
-                    onChange={(e) => setNewRouter({...newRouter, hostname: e.target.value})}
+                    onChange={(e) => setNewRouter({ ...newRouter, hostname: e.target.value })}
                   />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-400 uppercase tracking-wider ml-1">Site / Region</label>
+                <div>
+                  <label className="data-label block mb-1.5">Site / Region</label>
                   <input
-                    className="w-full bg-dark-900/50 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-white placeholder:text-slate-600"
-                    placeholder="e.g. London-DC"
+                    className="input-field"
+                    placeholder="London-DC"
                     value={newRouter.site}
-                    onChange={(e) => setNewRouter({...newRouter, site: e.target.value})}
+                    onChange={(e) => setNewRouter({ ...newRouter, site: e.target.value })}
                   />
                 </div>
-                <div className="space-y-2 pb-4">
-                  <label className="text-sm font-bold text-slate-400 uppercase tracking-wider ml-1">API Key</label>
+                <div>
+                  <label className="data-label block mb-1.5">API Key</label>
                   <input
                     required
                     type="password"
-                    className="w-full bg-dark-900/50 border border-white/10 rounded-xl py-3 px-4 focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-all text-white placeholder:text-slate-600"
+                    className="input-field"
                     placeholder="••••••••••••"
                     value={newRouter.api_key}
-                    onChange={(e) => setNewRouter({...newRouter, api_key: e.target.value})}
+                    onChange={(e) => setNewRouter({ ...newRouter, api_key: e.target.value })}
                   />
                 </div>
-                <div className="flex gap-4 pt-4">
+
+                <div className="flex gap-3 pt-2">
                   <button
                     type="button"
                     onClick={() => setShowAddModal(false)}
-                    className="flex-1 btn-secondary"
+                    className="btn-secondary flex-1"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="flex-1 btn-primary"
+                    className="btn-primary flex-1 flex items-center justify-center gap-2"
                   >
-                    {submitting ? 'Registering...' : 'Register Router'}
+                    {submitting ? (
+                      <>
+                        <span className="spinner" />
+                        Registering...
+                      </>
+                    ) : 'Register'}
                   </button>
                 </div>
               </form>
             </div>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
