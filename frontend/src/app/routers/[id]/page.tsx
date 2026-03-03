@@ -23,12 +23,6 @@ function getIfaceRoot(interfaces: any) {
   return interfaces?.interface ?? interfaces;
 }
 function getIfaceRx(d: any) {
-  return parseInt(d?.['rx-bytes'] ?? d?.stats?.rx_bytes ?? 0) || 0;
-}
-function getIfaceTx(d: any) {
-  return parseInt(d?.['tx-bytes'] ?? d?.stats?.tx_bytes ?? 0) || 0;
-}
-function getIfaceRx(d: any) {
   const val = d?.['rx-bytes'] ?? d?.stats?.rx_bytes ?? 0;
   return typeof val === 'string' ? parseInt(val.replace(/,/g, '')) : parseInt(val);
 }

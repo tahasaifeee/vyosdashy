@@ -94,31 +94,19 @@ check_status_and_logs() {
     $DOCKER_COMPOSE_CMD ps
     
     echo ""
-    echo "Gathering last 30 lines of Backend logs..."
-    echo "----------------------------------------"
+    echo "--- Recent Backend Logs ---"
     $DOCKER_COMPOSE_CMD logs --tail=30 backend || echo "Failed to get backend logs."
-    echo "----------------------------------------"
-
+    
     echo ""
-    echo "Gathering last 30 lines of Database logs..."
-    echo "----------------------------------------"
+    echo "--- Recent Database Logs ---"
     $DOCKER_COMPOSE_CMD logs --tail=30 db || echo "Failed to get database logs."
-    echo "----------------------------------------"
 
     echo ""
-    echo "Diagnostic Check: Connectivity"
+    echo "--- Connectivity Check ---"
     if curl -s -I http://localhost:8000/health | grep -q "200 OK"; then
         echo "[OK] Backend API is reachable and healthy."
     else
         echo "[ERROR] Backend API is NOT responding on http://localhost:8000/health"
-        echo "Check if the port is blocked or if the container is crashing (see logs above)."
-    fi
-
-    echo ""
-    prompt_user "Save all logs to 'debug_logs.txt'? (y/N): " "n" save_logs
-    if [[ "$save_logs" =~ ^[Yy]$ ]]; then
-        $DOCKER_COMPOSE_CMD logs > debug_logs.txt
-        echo "Logs saved to debug_logs.txt"
     fi
 
     echo ""
