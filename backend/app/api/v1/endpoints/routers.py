@@ -284,6 +284,46 @@ async def ping_from_router(
     output = await client.ping(host, count)
     return {"output": output}
 
+@router.post("/{id}/traceroute")
+async def traceroute_from_router(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    id: int,
+    host: str = Body(..., embed=True),
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Run traceroute command from the router to a target host.
+    """
+    result = await db.execute(select(Router).where(Router.id == id))
+    router_obj = result.scalars().first()
+    if not router_obj:
+        raise HTTPException(status_code=404, detail="Router not found")
+
+    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
+    output = await client.traceroute(host)
+    return {"output": output}
+
+@router.post("/{id}/monitor/traffic")
+async def monitor_traffic_capture(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    id: int,
+    interface: str = Body(..., embed=True),
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Capture a burst of traffic from a specific interface.
+    """
+    result = await db.execute(select(Router).where(Router.id == id))
+    router_obj = result.scalars().first()
+    if not router_obj:
+        raise HTTPException(status_code=404, detail="Router not found")
+
+    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
+    output = await client.capture_traffic(interface)
+    return {"output": output}
+
 @router.post("/{id}/config/timezone")
 async def update_router_timezone(
     *,

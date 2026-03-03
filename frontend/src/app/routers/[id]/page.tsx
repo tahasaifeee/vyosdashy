@@ -11,9 +11,8 @@ import {
   Maximize2, Layers, Monitor, HardDriveDownload, HardDriveUpload,
   List, Terminal, Search, ChevronDown, ChevronUp, Download, Settings2, Check,
   LayoutDashboard, FileText, ActivitySquare, Shield, Menu, X as CloseIcon,
-  Play, Save, Globe2, Key, Fingerprint, ShieldAlert
-  } from 'lucide-react';
-import Navbar from '@/components/Navbar';
+  Play, Save, Globe2, Key, Fingerprint, ShieldAlert, Radar, ScanSearch
+  } from 'lucide-react';import Navbar from '@/components/Navbar';
 import { DashboardSkeleton } from '@/components/Skeleton';
 import { AnimatedNumber } from '@/components/AnimatedNumber';
 
@@ -137,6 +136,16 @@ export default function RouterDashboard() {
   const [pingOutput, setPingOutput] = useState('');
   const [pingLoading, setPingLoading] = useState(false);
 
+  // Traceroute State
+  const [tracerouteTarget, setTracerouteTarget] = useState('');
+  const [tracerouteOutput, setTracerouteOutput] = useState('');
+  const [tracerouteLoading, setTracerouteLoading] = useState(false);
+
+  // Packet Capture State
+  const [captureInterface, setCaptureInterface] = useState('');
+  const [captureOutput, setCaptureOutput] = useState('');
+  const [captureLoading, setCaptureLoading] = useState(false);
+
   // Configuration State
   const [newTimezone, setNewTimezone] = useState('');
   const [configLoading, setConfigLoading] = useState(false);
@@ -252,6 +261,36 @@ export default function RouterDashboard() {
       setPingOutput(err.response?.data?.detail || 'Ping failed.');
     } finally {
       setPingLoading(false);
+    }
+  };
+
+  const handleTraceroute = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!tracerouteTarget) return;
+    setTracerouteLoading(true);
+    setTracerouteOutput('Tracing path to target...');
+    try {
+      const res = await api.post(`/routers/${id}/traceroute`, { host: tracerouteTarget });
+      setTracerouteOutput(res.data.output);
+    } catch (err: any) {
+      setTracerouteOutput(err.response?.data?.detail || 'Traceroute failed.');
+    } finally {
+      setTracerouteLoading(false);
+    }
+  };
+
+  const handleCapture = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!captureInterface) return;
+    setCaptureLoading(true);
+    setCaptureOutput(`Starting 5-second packet capture on ${captureInterface}...`);
+    try {
+      const res = await api.post(`/routers/${id}/monitor/traffic`, { interface: captureInterface });
+      setCaptureOutput(res.data.output);
+    } catch (err: any) {
+      setCaptureOutput(err.response?.data?.detail || 'Traffic capture failed.');
+    } finally {
+      setCaptureLoading(false);
     }
   };
 
@@ -447,6 +486,25 @@ export default function RouterDashboard() {
                 </div>
               </div>
 
+              {/* Category: Traffic Analysis */}
+              <div>
+                <SidebarCategory label="Traffic Analysis" />
+                <div className="mt-2 space-y-1">
+                  <SidebarItem 
+                    active={activeTab === 'capture'} 
+                    onClick={() => setActiveTab('capture')} 
+                    icon={<Radar className="w-4 h-4" />} 
+                    label="Packet Capture" 
+                  />
+                  <SidebarItem 
+                    active={activeTab === 'bandwidth'} 
+                    onClick={() => setActiveTab('bandwidth')} 
+                    icon={<Activity className="w-4 h-4" />} 
+                    label="Bandwidth Monitor" 
+                  />
+                </div>
+              </div>
+
               {/* Category: System */}
               <div>
                 <SidebarCategory label="System" />
@@ -477,8 +535,8 @@ export default function RouterDashboard() {
                     label="Ping Tool" 
                   />
                   <SidebarItem 
-                    active={false} 
-                    onClick={() => {}} 
+                    active={activeTab === 'traceroute'} 
+                    onClick={() => setActiveTab('traceroute')} 
                     icon={<Terminal className="w-4 h-4" />} 
                     label="Traceroute" 
                   />
@@ -837,6 +895,80 @@ export default function RouterDashboard() {
                         </pre>
                       </div>
                     )}
+                    {activeTab === 'capture' && (
+                      <div className="space-y-6">
+                        <div className="bg-primary/5 p-6 rounded-3xl border border-primary/10">
+                          <h4 className="text-sm font-black text-primary uppercase tracking-widest mb-4 flex items-center gap-2">
+                            <Radar className="w-4 h-4" /> Real-time Packet Sniffer
+                          </h4>
+                          <form onSubmit={handleCapture} className="flex flex-col sm:flex-row gap-4">
+                            <select 
+                              required
+                              className="flex-1 bg-white dark:bg-dark-900 border border-slate-200 dark:border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary"
+                              value={captureInterface}
+                              onChange={(e) => setCaptureInterface(e.target.value)}
+                            >
+                              <option value="">Select Interface...</option>
+                              {interfacesList.map(iface => (
+                                <option key={iface.name} value={iface.name}>{iface.name} ({iface.type})</option>
+                              ))}
+                            </select>
+                            <button 
+                              type="submit" 
+                              disabled={captureLoading || !captureInterface}
+                              className="btn-primary px-8 flex items-center justify-center gap-2"
+                            >
+                              {captureLoading ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <ScanSearch className="w-4 h-4" />}
+                              Capture Burst
+                            </button>
+                          </form>
+                        </div>
+                        <pre className="bg-slate-100 dark:bg-dark-900/50 p-8 rounded-3xl border border-slate-200 dark:border-white/5 font-mono text-[11px] text-slate-700 dark:text-slate-300 overflow-x-auto whitespace-pre shadow-inner custom-scrollbar min-h-[400px]">
+                          {captureOutput || 'Select an interface and click "Capture Burst" to analyze live traffic (5s sample).'}
+                        </pre>
+                      </div>
+                    )}
+                    {activeTab === 'bandwidth' && (
+                      <div className="space-y-8">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                          {interfacesList.map((iface) => (
+                            <div key={iface.name} className="glass-card p-6">
+                              <div className="flex justify-between items-start mb-6">
+                                <div>
+                                  <h5 className="font-black text-slate-900 dark:text-white">{iface.name}</h5>
+                                  <p className="text-[10px] font-bold text-slate-500 uppercase">{iface.type}</p>
+                                </div>
+                                <ActivitySquare className="w-4 h-4 text-primary" />
+                              </div>
+                              <div className="space-y-4">
+                                <div>
+                                  <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase mb-1">
+                                    <span>RX Bandwidth</span>
+                                    <span className="text-info font-mono">{formatBytes(getIfaceRx(iface))}</span>
+                                  </div>
+                                  <div className="h-1 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
+                                    <div className="h-full bg-info animate-pulse" style={{ width: '45%' }} />
+                                  </div>
+                                </div>
+                                <div>
+                                  <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase mb-1">
+                                    <span>TX Bandwidth</span>
+                                    <span className="text-primary font-mono">{formatBytes(getIfaceTx(iface))}</span>
+                                  </div>
+                                  <div className="h-1 w-full bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
+                                    <div className="h-full bg-primary animate-pulse" style={{ width: '30%' }} />
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="p-6 bg-warning/5 border border-warning/20 rounded-3xl flex gap-4 items-center">
+                          <ShieldAlert className="w-6 h-6 text-warning" />
+                          <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">Bandwidth monitor uses 5-second sampling intervals from the dataplane. Values represent total processed bytes since last boot.</p>
+                        </div>
+                      </div>
+                    )}
                     {activeTab === 'ping' && (
                       <div className="space-y-6">
                         <form onSubmit={handlePing} className="flex flex-col sm:flex-row gap-4">
@@ -861,6 +993,33 @@ export default function RouterDashboard() {
                         </form>
                         <div className="bg-slate-100 dark:bg-dark-900/50 p-6 rounded-2xl border border-slate-200 dark:border-white/5 font-mono text-xs text-slate-700 dark:text-slate-300 min-h-[200px] whitespace-pre-wrap shadow-inner">
                           {pingOutput || 'Enter a target and click "Execute Ping" to start connectivity test from the router.'}
+                        </div>
+                      </div>
+                    )}
+                    {activeTab === 'traceroute' && (
+                      <div className="space-y-6">
+                        <form onSubmit={handleTraceroute} className="flex flex-col sm:flex-row gap-4">
+                          <div className="flex-1 relative">
+                            <Globe className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                            <input 
+                              required
+                              className="w-full bg-slate-100 dark:bg-dark-900/50 border border-slate-200 dark:border-white/5 rounded-xl py-3 pl-12 pr-4 outline-none focus:ring-2 focus:ring-primary transition-all text-sm"
+                              placeholder="Target Hostname (e.g. google.com)"
+                              value={tracerouteTarget}
+                              onChange={(e) => setTracerouteTarget(e.target.value)}
+                            />
+                          </div>
+                          <button 
+                            type="submit" 
+                            disabled={tracerouteLoading}
+                            className="btn-primary px-8 flex items-center justify-center gap-2"
+                          >
+                            {tracerouteLoading ? <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" /> : <Terminal className="w-4 h-4" />}
+                            Run Traceroute
+                          </button>
+                        </form>
+                        <div className="bg-slate-100 dark:bg-dark-900/50 p-6 rounded-2xl border border-slate-200 dark:border-white/5 font-mono text-xs text-slate-700 dark:text-slate-300 min-h-[300px] whitespace-pre shadow-inner">
+                          {tracerouteOutput || 'Enter a destination and click "Run Traceroute" to map the network path.'}
                         </div>
                       </div>
                     )}

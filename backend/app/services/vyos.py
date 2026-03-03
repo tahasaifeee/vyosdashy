@@ -251,6 +251,18 @@ class VyOSClient:
     async def ping(self, host: str, count: int = 4) -> str:
         return await self.show_text(["ping", host, "count", str(count)])
 
+    async def traceroute(self, host: str) -> str:
+        return await self.show_text(["traceroute", host])
+
+    async def capture_traffic(self, interface: str, count: int = 50) -> str:
+        """
+        Capture a burst of traffic. 
+        Note: We use 'monitor traffic' but it can be tricky via API.
+        A better way is often 'show log' or specific 'show' commands 
+        if we want formatted output.
+        """
+        return await self.show_text(["monitor", "traffic", interface, "unlimited"])
+
     async def run_op(self, cmd_parts: List[str]) -> str:
         """
         Run an arbitrary operational command.
