@@ -612,18 +612,6 @@ export default function RouterDashboard() {
                   </div>
 
                   <div className="space-y-8">
-                    {/* Quick Actions */}
-                    <div className="bg-primary/5 dark:bg-primary/10 border border-primary/20 rounded-3xl p-6 relative overflow-hidden group">
-                      <div className="absolute -right-4 -top-4 bg-primary/20 w-24 h-24 rounded-full blur-2xl group-hover:scale-150 transition-transform duration-700" />
-                      <h4 className="font-black text-slate-900 dark:text-white text-lg tracking-tighter mb-4 flex items-center gap-2"><TerminalSquare className="w-5 h-5 text-primary" /> Rapid Control</h4>
-                      <div className="grid grid-cols-2 gap-3">
-                        <ActionButton icon={<Route className="w-4 h-4" />} label="RIB" onClick={() => setActiveTab('routes')} />
-                        <ActionButton icon={<Monitor className="w-4 h-4" />} label="Logs" onClick={() => setActiveTab('logs')} />
-                        <ActionButton icon={<ShieldCheck className="w-4 h-4" />} label="FW" />
-                        <ActionButton icon={<Maximize2 className="w-4 h-4" />} label="SSH" />
-                      </div>
-                    </div>
-
                     {/* DHCP Pools */}
                     {dhcpPools.length > 0 && (
                       <DashboardCard title="DHCP Address Pools" isCollapsible>
