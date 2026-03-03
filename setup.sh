@@ -82,6 +82,38 @@ DOCKER_COMPOSE_CMD=$(detect_docker_compose)
 
 # --- MODULES ---
 
+check_status_and_logs() {
+    echo ""
+    echo "--- System Status & Logs ---"
+    if [ -z "$DOCKER_COMPOSE_CMD" ]; then
+        echo "Error: Docker Compose not found."
+        return
+    fi
+
+    echo "Container Status:"
+    $DOCKER_COMPOSE_CMD ps
+    
+    echo ""
+    prompt_user "Would you like to see the last 20 lines of backend logs? (y/N): " "n" show_logs
+    if [[ "$show_logs" =~ ^[Yy]$ ]]; then
+        echo "--- Backend Logs ---"
+        $DOCKER_COMPOSE_CMD logs --tail=20 backend
+    fi
+
+    echo ""
+    prompt_user "Would you like to see the last 20 lines of database logs? (y/N): " "n" show_db_logs
+    if [[ "$show_db_logs" =~ ^[Yy]$ ]]; then
+        echo "--- Database Logs ---"
+        $DOCKER_COMPOSE_CMD logs --tail=20 db
+    fi
+
+    echo ""
+    prompt_user "Follow live logs? (Ctrl+C to stop) (y/N): " "n" follow_logs
+    if [[ "$follow_logs" =~ ^[Yy]$ ]]; then
+        $DOCKER_COMPOSE_CMD logs -f
+    fi
+}
+
 create_admin_user() {
     echo ""
     echo "--- Admin User Setup ---"
@@ -94,11 +126,11 @@ create_admin_user() {
         echo "Creating admin user in database..."
         # Wait for the DB to be ready
         sleep 5
-        # Try to find the backend container name (it might be vyosdashy-backend-1 or vyos_dashy-backend-1)
+        # Try to find the backend container name
         BACKEND_CONTAINER=$(docker ps --format "{{.Names}}" | grep "backend" | head -n 1)
         if [ -n "$BACKEND_CONTAINER" ]; then
             docker exec -i "$BACKEND_CONTAINER" python app/create_first_user.py "$ADMIN_EMAIL" "$ADMIN_PASSWORD" "$ADMIN_NAME" "admin" || \
-            echo "Failed to create user. Please check container logs: docker logs $BACKEND_CONTAINER"
+            echo "Failed to create user. Please check container logs: $DOCKER_COMPOSE_CMD logs backend"
         else
             echo "Error: Backend container not found. Is the app running?"
         fi
@@ -157,6 +189,7 @@ EOF
         prompt_user "Rebuild and restart containers to apply changes? (y/N): " "n" restart
         if [[ "$restart" =~ ^[Yy]$ ]]; then
             $DOCKER_COMPOSE_CMD up -d --build --force-recreate
+            check_status_and_logs
         fi
         create_admin_user
     fi
@@ -176,7 +209,6 @@ update_app() {
     [ -f "backend/.env" ] && cp backend/.env /tmp/vyos_backend_env_backup
 
     # Migration: if backend/.env is still tracked by git, remove it from the index
-    # so the incoming commit that untracks it can proceed without conflict.
     if git ls-files --error-unmatch backend/.env >/dev/null 2>&1; then
         echo "Note: Removing backend/.env from git tracking (settings preserved)..."
         git checkout -- backend/.env
@@ -184,12 +216,8 @@ update_app() {
     fi
 
     echo "Pulling latest changes from repository..."
-    # Fetch first so we can inspect what the incoming commits touch before merging.
     git fetch origin
 
-    # Remove any untracked local files that the incoming commits would create/overwrite.
-    # These are repo-managed files (e.g. .gitignore, CLAUDE.md) — safe to replace with
-    # the repo version. backend/.env is handled separately via the backup above.
     git diff --name-only HEAD FETCH_HEAD 2>/dev/null | while IFS= read -r f; do
         if [ -f "$f" ] && ! git ls-files --error-unmatch "$f" >/dev/null 2>&1; then
             echo "  Clearing untracked file for update: $f"
@@ -209,6 +237,7 @@ update_app() {
     if [ -n "$DOCKER_COMPOSE_CMD" ]; then
         echo "Rebuilding and restarting containers..."
         $DOCKER_COMPOSE_CMD up -d --build --force-recreate
+        check_status_and_logs
         create_admin_user
     else
         echo "Update complete. (Docker Compose not found, please restart manually)"
@@ -293,6 +322,7 @@ install_app() {
             $DOCKER_COMPOSE_CMD up -d --build --force-recreate
             echo "Waiting for database to initialize..."
             sleep 10
+            check_status_and_logs
             create_admin_user
             echo "Application started!"
             echo "Frontend: http://localhost:3000"
@@ -318,14 +348,16 @@ if [ "$IS_INSTALLED" = true ]; then
     echo "Existing installation detected."
     echo "1) Update (Pull latest code and rebuild)"
     echo "2) Reconfigure (Update .env settings and Admin user)"
-    echo "3) Uninstall (Stop and remove everything)"
-    echo "4) Exit"
-    prompt_user "Select an option [1-4]: " "4" choice
+    echo "3) Check Status & Logs"
+    echo "4) Uninstall (Stop and remove everything)"
+    echo "5) Exit"
+    prompt_user "Select an option [1-5]: " "5" choice
 
     case $choice in
         1) update_app ;;
         2) reconfigure ;;
-        3) uninstall_app ;;
+        3) check_status_and_logs ;;
+        4) uninstall_app ;;
         *) exit 0 ;;
     esac
 else
