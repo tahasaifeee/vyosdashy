@@ -330,7 +330,7 @@ async def get_router_processes(
         raise HTTPException(status_code=404, detail="Router not found")
 
     client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
-    output = await client.run_op("show system processes")
+    output = await client.run_op(["show", "system", "processes"])
     return {"output": output}
 
 @router.delete("/{id}", response_model=RouterSchema)

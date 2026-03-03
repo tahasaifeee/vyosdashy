@@ -251,6 +251,30 @@ class VyOSClient:
     async def ping(self, host: str, count: int = 4) -> str:
         return await self.show_text(["ping", host, "count", str(count)])
 
+    async def run_op(self, cmd_parts: List[str]) -> str:
+        """
+        Run an arbitrary operational command.
+        Example: cmd_parts=["show", "system", "processes"]
+        """
+        try:
+            payload = {
+                "op": "run",
+                "path": cmd_parts
+            }
+            async with httpx.AsyncClient(verify=False, timeout=30.0) as client:
+                response = await client.post(
+                    f"{self.base_url}/run",
+                    data={"data": json.dumps(payload), "key": self.api_key}
+                )
+                if response.status_code == 200:
+                    res_json = response.json()
+                    if res_json.get("success"):
+                        return res_json.get("data", "")
+                    return f"Error: {res_json.get('error')}"
+                return f"HTTP Error: {response.status_code}"
+        except Exception as e:
+            return f"Exception: {str(e)}"
+
     # ── Configuration Management (Write) ─────────────────────────────────
 
     async def set_config(self, path: List[str]) -> Dict[str, Any]:
