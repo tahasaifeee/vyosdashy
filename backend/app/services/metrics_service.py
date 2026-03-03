@@ -242,6 +242,8 @@ class MetricsService:
                 print(f"Error in collection for router {rid}: {e}")
 
 async def run_metrics_collector():
+    # Initial delay to let the app start up completely
+    await asyncio.sleep(10)
     while True:
         await MetricsService.collect_all_metrics()
         await asyncio.sleep(30)

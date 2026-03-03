@@ -105,10 +105,11 @@ check_status_and_logs() {
     echo "--- Connectivity Check ---"
     echo "Waiting for API to respond (up to 60s)..."
     for i in {1..12}; do
-        if curl -s -I http://localhost:8000/health | grep -q "200 OK"; then
+        if curl -s http://localhost:8000/health | grep -q "ok"; then
             echo "[OK] Backend API is reachable and healthy."
             return
         fi
+
         echo "  Attempt $i/12: Still waiting..."
         sleep 5
     done
