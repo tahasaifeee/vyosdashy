@@ -350,3 +350,24 @@ class VyOSClient:
             return {"success": True}
         except Exception as e:
             return {"success": False, "error": str(e)}
+
+    async def batch_configure(self, commands: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Executes multiple config operations. 
+        Each cmd in commands: {"op": "set"|"delete", "path": [...], "value": "..."}
+        """
+        try:
+            for cmd in commands:
+                op = cmd.get("op", "set")
+                path = cmd.get("path", [])
+                val = cmd.get("value")
+                if op == "set":
+                    await asyncio.to_thread(self.device.configure_set, path, str(val) if val is not None else None)
+                elif op == "delete":
+                    await asyncio.to_thread(self.device.configure_delete, path)
+            
+            # pyvyos auto-commits on each call, so we just need to save at the end
+            await self.save()
+            return {"success": True}
+        except Exception as e:
+            return {"success": False, "error": str(e)}

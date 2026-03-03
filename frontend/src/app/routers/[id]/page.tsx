@@ -118,6 +118,39 @@ export default function RouterDashboard() {
   const [loadingTab, setLoadingTab] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
+  // Configuration Forms State
+  const [showIpsecForm, setShowIpsecForm] = useState(false);
+  const [ipsecForm, setIpsecForm] = useState({
+    peerName: '',
+    remoteAddr: '',
+    localAddr: '',
+    presharedKey: '',
+    localPrefix: '192.168.1.0/24',
+    remotePrefix: ''
+  });
+
+  const handleSaveIPsecPeer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setConfigLoading(true);
+    try {
+      const commands = [
+        { path: ['vpn', 'ipsec', 'site-to-site', 'peer', ipsecForm.peerName, 'authentication', 'mode'], value: 'pre-shared-secret' },
+        { path: ['vpn', 'ipsec', 'site-to-site', 'peer', ipsecForm.peerName, 'authentication', 'pre-shared-secret'], value: ipsecForm.presharedKey },
+        { path: ['vpn', 'ipsec', 'site-to-site', 'peer', ipsecForm.peerName, 'local-address'], value: ipsecForm.localAddr },
+        { path: ['vpn', 'ipsec', 'site-to-site', 'peer', ipsecForm.peerName, 'remote-address'], value: ipsecForm.remoteAddr },
+        { path: ['vpn', 'ipsec', 'site-to-site', 'peer', ipsecForm.peerName, 'tunnel', '0', 'local', 'prefix'], value: ipsecForm.localPrefix },
+        { path: ['vpn', 'ipsec', 'site-to-site', 'peer', ipsecForm.peerName, 'tunnel', '0', 'remote', 'prefix'], value: ipsecForm.remotePrefix },
+      ];
+      await api.post(`/routers/${id}/config/batch`, commands);
+      setShowIpsecForm(false);
+      fetchData();
+    } catch (err: any) {
+      alert('Failed to save IPsec peer: ' + (err.response?.data?.detail || err.message));
+    } finally {
+      setConfigLoading(false);
+    }
+  };
+
   // Tool States
   const [pingTarget, setPingTarget] = useState('');
   const [pingOutput, setPingOutput] = useState('');
@@ -553,18 +586,115 @@ export default function RouterDashboard() {
                         </div>
                       )}
                       {activeTab === 'vpn' && (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                          {['ipsec', 'l2tp', 'openconnect', 'pptp', 'sstp'].map(svc => (
-                            <div key={svc} className="p-6 bg-slate-50 dark:bg-white/5 rounded-3xl border dark:border-white/5 space-y-4">
-                              <div className="flex items-center justify-between">
-                                <span className="font-black uppercase text-xs">{svc} VPN</span>
-                                <div className={`w-2 h-2 rounded-full ${(configStatus?.vpn as any)?.[svc] ? 'bg-success' : 'bg-slate-300'}`} />
+                        <div className="space-y-8 animate-in fade-in duration-500">
+                          {/* VPN Service Toggles */}
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            {['ipsec', 'l2tp', 'openconnect', 'pptp', 'sstp'].map(svc => (
+                              <div key={svc} className="p-6 bg-slate-50 dark:bg-white/5 rounded-3xl border dark:border-white/5 space-y-4">
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                    <div className={`p-2 rounded-lg ${(configStatus?.vpn as any)?.[svc] ? 'bg-success/10 text-success' : 'bg-slate-200 dark:bg-white/10 text-slate-400'}`}>
+                                      <Lock className="w-4 h-4" />
+                                    </div>
+                                    <span className="font-black uppercase text-xs">{svc} Service</span>
+                                  </div>
+                                  <div className={`w-2 h-2 rounded-full ${(configStatus?.vpn as any)?.[svc] ? 'bg-success shadow-glow' : 'bg-slate-300'}`} />
+                                </div>
+                                <button onClick={() => toggleVpnService(svc, (configStatus?.vpn as any)?.[svc])} disabled={configLoading} className={`w-full py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${(configStatus?.vpn as any)?.[svc] ? 'bg-danger/10 text-danger hover:bg-danger hover:text-white' : 'bg-success/10 text-success hover:bg-success hover:text-white'}`}>
+                                  {(configStatus?.vpn as any)?.[svc] ? 'Disable' : 'Enable'}
+                                </button>
                               </div>
-                              <button onClick={() => toggleVpnService(svc, (configStatus?.vpn as any)?.[svc])} disabled={configLoading} className={`w-full py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${(configStatus?.vpn as any)?.[svc] ? 'bg-danger/10 text-danger hover:bg-danger hover:text-white' : 'bg-success/10 text-success hover:bg-success hover:text-white'}`}>
-                                {(configStatus?.vpn as any)?.[svc] ? 'Disable' : 'Enable'}
+                            ))}
+                          </div>
+
+                          {/* Site-to-Site IPsec Manager */}
+                          <div className="space-y-6">
+                            <div className="flex items-center justify-between px-2">
+                              <h4 className="text-lg font-black tracking-tight">IPsec Site-to-Site Tunnels</h4>
+                              <button 
+                                onClick={() => setShowIpsecForm(!showIpsecForm)}
+                                className="btn-primary px-4 py-2 text-[10px] font-black uppercase flex items-center gap-2"
+                              >
+                                {showIpsecForm ? <CloseIcon className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                                {showIpsecForm ? 'Cancel' : 'New Tunnel'}
                               </button>
                             </div>
-                          ))}
+
+                            {showIpsecForm && (
+                              <form onSubmit={handleSaveIPsecPeer} className="bg-primary/5 border border-primary/20 rounded-3xl p-8 animate-in slide-in-from-top-4 duration-300">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                  <div className="space-y-4">
+                                    <h5 className="text-[10px] font-black text-primary uppercase tracking-widest">General Settings</h5>
+                                    <div className="space-y-2">
+                                      <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Peer Name (ID)</label>
+                                      <input required className="w-full bg-white dark:bg-dark-900 border dark:border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary" placeholder="e.g. office-to-datacenter" value={ipsecForm.peerName} onChange={e => setIpsecForm({...ipsecForm, peerName: e.target.value})} />
+                                    </div>
+                                    <div className="space-y-2">
+                                      <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Pre-Shared Key (Secret)</label>
+                                      <input required type="password" title="Enter PSK" className="w-full bg-white dark:bg-dark-900 border dark:border-white/10 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-primary" value={ipsecForm.presharedKey} onChange={e => setIpsecForm({...ipsecForm, presharedKey: e.target.value})} />
+                                    </div>
+                                  </div>
+                                  <div className="space-y-4">
+                                    <h5 className="text-[10px] font-black text-primary uppercase tracking-widest">Network Topology</h5>
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Local IP</label>
+                                        <input required className="w-full bg-white dark:bg-dark-900 border dark:border-white/10 rounded-xl px-4 py-3 text-sm" placeholder="1.2.3.4" value={ipsecForm.localAddr} onChange={e => setIpsecForm({...ipsecForm, localAddr: e.target.value})} />
+                                      </div>
+                                      <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Remote IP</label>
+                                        <input required className="w-full bg-white dark:bg-dark-900 border dark:border-white/10 rounded-xl px-4 py-3 text-sm" placeholder="5.6.7.8" value={ipsecForm.remoteAddr} onChange={e => setIpsecForm({...ipsecForm, remoteAddr: e.target.value})} />
+                                      </div>
+                                    </div>
+                                    <div className="grid grid-cols-2 gap-4">
+                                      <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Local Network</label>
+                                        <input required className="w-full bg-white dark:bg-dark-900 border dark:border-white/10 rounded-xl px-4 py-3 text-sm" placeholder="192.168.1.0/24" value={ipsecForm.localPrefix} onChange={e => setIpsecForm({...ipsecForm, localPrefix: e.target.value})} />
+                                      </div>
+                                      <div className="space-y-2">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase ml-1">Remote Network</label>
+                                        <input required className="w-full bg-white dark:bg-dark-900 border dark:border-white/10 rounded-xl px-4 py-3 text-sm" placeholder="10.0.0.0/24" value={ipsecForm.remotePrefix} onChange={e => setIpsecForm({...ipsecForm, remotePrefix: e.target.value})} />
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                                <div className="mt-8 flex justify-end">
+                                  <button type="submit" disabled={configLoading} className="btn-primary px-10 py-3 flex items-center gap-3">
+                                    {configLoading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                                    Deploy Configuration
+                                  </button>
+                                </div>
+                              </form>
+                            )}
+
+                            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                              {Object.entries(routerConfig?.vpn?.ipsec?.['site-to-site']?.peer || {}).map(([name, peer]: any) => (
+                                <div key={name} className="bg-white dark:bg-white/5 rounded-3xl border border-slate-200 dark:border-white/10 p-6 space-y-4">
+                                  <div className="flex justify-between items-start">
+                                    <div>
+                                      <h5 className="font-black text-slate-900 dark:text-white">{name}</h5>
+                                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Remote: {peer['remote-address']}</p>
+                                    </div>
+                                    <div className="status-badge bg-success/10 text-success">active</div>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-4 py-4 border-y border-slate-100 dark:border-white/5">
+                                    <div>
+                                      <p className="text-[9px] font-black text-slate-400 uppercase">Local Subnet</p>
+                                      <p className="text-xs font-bold font-mono">{peer.tunnel?.['0']?.local?.prefix || 'N/A'}</p>
+                                    </div>
+                                    <div>
+                                      <p className="text-[9px] font-black text-slate-400 uppercase">Remote Subnet</p>
+                                      <p className="text-xs font-bold font-mono">{peer.tunnel?.['0']?.remote?.prefix || 'N/A'}</p>
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <button className="flex-1 bg-slate-100 dark:bg-white/5 py-2 rounded-xl text-[9px] font-black uppercase hover:bg-primary/10 hover:text-primary transition-all">Edit Tunnel</button>
+                                    <button className="p-2 text-slate-400 hover:text-danger"><Trash2 className="w-4 h-4" /></button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
                         </div>
                       )}
                       {['conntrack', 'top', 'arp', 'leases', 'nat', 'logs'].includes(activeTab) && (

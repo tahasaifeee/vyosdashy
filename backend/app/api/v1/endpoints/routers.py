@@ -471,6 +471,27 @@ async def remove_firewall_group_address(
     await client.save()
     return {"success": True}
 
+@router.post("/{id}/config/batch")
+async def batch_configure_router(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    id: int,
+    commands: List[Dict[str, Any]] = Body(...),
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Execute multiple configuration commands in one transaction.
+    """
+    result = await db.execute(select(Router).where(Router.id == id))
+    router_obj = result.scalars().first()
+    if not router_obj:
+        raise HTTPException(status_code=404, detail="Router not found")
+    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
+    res = await client.batch_configure(commands)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    return {"success": True}
+
 @router.delete("/{id}", response_model=RouterSchema)
 async def delete_router(
     *,
