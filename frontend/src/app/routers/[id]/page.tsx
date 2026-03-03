@@ -432,6 +432,19 @@ export default function RouterDashboard() {
                 </div>
               </div>
 
+              {/* Category: Security */}
+              <div>
+                <SidebarCategory label="Security & VPN" />
+                <div className="mt-2 space-y-1">
+                  <SidebarItem 
+                    active={activeTab === 'vpn'} 
+                    onClick={() => setActiveTab('vpn')} 
+                    icon={<Lock className="w-4 h-4" />} 
+                    label="VPN Gateway" 
+                  />
+                </div>
+              </div>
+
               {/* Category: System */}
               <div>
                 <SidebarCategory label="System" />
