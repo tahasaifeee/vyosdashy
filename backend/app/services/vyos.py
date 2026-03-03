@@ -2,8 +2,12 @@ import httpx
 import json
 import re
 import asyncio
+import urllib3
 from typing import Any, Dict, List, Optional
-from pyvyos import Client
+from pyvyos.device import VyDevice
+
+# Disable SSL warnings for self-signed VyOS certs
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class VyOSClient:
@@ -16,8 +20,8 @@ class VyOSClient:
         self.api_key = api_key
         self.verify = False  # VyOS typically uses self-signed certs
         
-        # Initialize pyvyos Client
-        self.client = Client(
+        # Initialize pyvyos VyDevice
+        self.device = VyDevice(
             hostname=self.hostname,
             apikey=self.api_key,
             port=self.port,
@@ -45,19 +49,23 @@ class VyOSClient:
     # ── Config Retrieval (REST) ──────────────────────────────────────────────
 
     async def get_config(self, path: List[str] = []) -> Dict[str, Any]:
-        """Retrieve configuration using pyvyos."""
+        """Retrieve configuration using pyvyos VyDevice."""
         try:
-            # pyvyos retrieve is synchronous, wrap in thread
-            result = await asyncio.to_thread(self.client.retrieve, path)
-            return {"success": True, "data": result}
+            # retrieve_show_config returns an ApiResponse object
+            response = await asyncio.to_thread(self.device.retrieve_show_config, path)
+            if response.error:
+                return {"success": False, "error": response.error}
+            return {"success": True, "data": response.result}
         except Exception as e:
             return {"success": False, "error": str(e)}
 
     async def show_text(self, path: List[str]) -> str:
-        """Show operational data using pyvyos."""
+        """Show operational data using pyvyos VyDevice."""
         try:
-            result = await asyncio.to_thread(self.client.show, path)
-            return str(result)
+            response = await asyncio.to_thread(self.device.show, path)
+            if response.error:
+                return f"Error: {response.error}"
+            return str(response.result)
         except Exception as e:
             return f"Error: {str(e)}"
 
@@ -216,33 +224,35 @@ class VyOSClient:
     # ── Configuration Management (Write) ─────────────────────────────────
 
     async def set_config(self, path: List[str]) -> Dict[str, Any]:
-        """Write configuration using pyvyos."""
+        """Write configuration using pyvyos VyDevice."""
         try:
-            await asyncio.to_thread(self.client.set, path)
+            response = await asyncio.to_thread(self.device.configure_set, path)
+            if response.error:
+                return {"success": False, "error": response.error}
             return {"success": True}
         except Exception as e:
             return {"success": False, "error": str(e)}
 
     async def delete_config(self, path: List[str]) -> Dict[str, Any]:
-        """Delete configuration using pyvyos."""
+        """Delete configuration using pyvyos VyDevice."""
         try:
-            await asyncio.to_thread(self.client.delete, path)
+            response = await asyncio.to_thread(self.device.configure_delete, path)
+            if response.error:
+                return {"success": False, "error": response.error}
             return {"success": True}
         except Exception as e:
             return {"success": False, "error": str(e)}
 
     async def commit(self) -> Dict[str, Any]:
-        """Commit changes using pyvyos."""
-        try:
-            await asyncio.to_thread(self.client.commit)
-            return {"success": True}
-        except Exception as e:
-            return {"success": False, "error": str(e)}
+        """VyDevice doesn't have a separate commit; it uses set/delete directly."""
+        return {"success": True}
 
     async def save(self) -> Dict[str, Any]:
-        """Save configuration using pyvyos."""
+        """Save configuration using pyvyos VyDevice."""
         try:
-            await asyncio.to_thread(self.client.save)
+            response = await asyncio.to_thread(self.device.config_file_save)
+            if response.error:
+                return {"success": False, "error": response.error}
             return {"success": True}
         except Exception as e:
             return {"success": False, "error": str(e)}
