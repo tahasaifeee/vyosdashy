@@ -522,6 +522,59 @@ async def batch_configure_router(
         raise HTTPException(status_code=400, detail=res.get("error"))
     return {"success": True}
 
+@router.get("/{id}/config/full")
+async def get_full_router_config(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    id: int,
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Retrieve the complete running configuration.
+    """
+    result = await db.execute(select(Router).where(Router.id == id))
+    router_obj = result.scalars().first()
+    if not router_obj:
+        raise HTTPException(status_code=404, detail="Router not found")
+    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
+    res = await client.get_config([])
+    return res.get("data", {})
+
+@router.post("/{id}/config/script")
+async def apply_config_script(
+    *,
+    db: AsyncSession = Depends(deps.get_db),
+    id: int,
+    script: str = Body(..., embed=True),
+    current_user: User = Depends(deps.get_current_user),
+) -> Any:
+    """
+    Apply a multi-line script of 'set' or 'delete' commands.
+    """
+    result = await db.execute(select(Router).where(Router.id == id))
+    router_obj = result.scalars().first()
+    if not router_obj:
+        raise HTTPException(status_code=404, detail="Router not found")
+    
+    commands = []
+    for line in script.splitlines():
+        line = line.strip()
+        if not line or line.startswith('#'): continue
+        parts = line.split()
+        op = parts[0].lower()
+        if op in ['set', 'delete']:
+            commands.append({"op": op, "path": parts[1:]})
+    
+    if not commands:
+        return {"success": True, "message": "No commands to execute"}
+
+    client = VyOSClient(hostname=router_obj.hostname, api_key=router_obj.api_key)
+    res = await client.batch_configure(commands)
+    if not res.get("success"):
+        raise HTTPException(status_code=400, detail=res.get("error"))
+    
+    return {"success": True, "count": len(commands)}
+
 @router.delete("/{id}", response_model=RouterSchema)
 async def delete_router(
     *,
