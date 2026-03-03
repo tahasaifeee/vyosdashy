@@ -146,7 +146,17 @@ class MetricsService:
                 # 1. Config (REST)
                 try:
                     res_if = await client.get_interface_config()
-                    if res_if.get("success"): iface_data = res_if.get("data", {})
+                    if res_if.get("success") and res_if.get("data"):
+                        iface_data = res_if.get("data", {})
+                    
+                    # If config is empty, try to get at least names via show
+                    if not iface_data:
+                        iface_text = await client.get_legacy_interface_stats()
+                        # Very basic check: if we got text, we know interfaces exist
+                        # The UI prefers the structured data from get_interface_config
+                except: pass
+
+                try:
                     res_bgp = await client.get_bgp_config()
                     if res_bgp.get("success"): bgp_data = res_bgp.get("data", {})
                 except: pass

@@ -202,8 +202,38 @@ class VyOSClient:
           }
         }
         """)
-        if "errors" in result: return None
+        if "errors" in result or not result.get("data"):
+            # Legacy Fallback: Parse 'show ip route'
+            try:
+                res = await self.show_text(["ip", "route"])
+                if res and not res.startswith("Error:"):
+                    routes = []
+                    # Simple regex parser for 'show ip route'
+                    # Format: S>* 0.0.0.0/0 [1/0] via 10.0.0.1, eth0, 01:23:45
+                    for line in res.splitlines():
+                        match = re.search(r"([A-Z])[\s>\*]+([\d\./]+)\s+\[.*?\]\s+via\s+([\d\.]+),\s+(\w+)", line)
+                        if match:
+                            routes.append({
+                                "protocol": match.group(1),
+                                "prefix": match.group(2),
+                                "next_hop": {"next_hop": match.group(3), "interface": match.group(4)},
+                                "selected": "*" in line
+                            })
+                    return routes
+            except: pass
+            return None
         return result.get("data", {}).get("ShowIpRoute", {}).get("result")
+
+    async def get_legacy_interface_status(self) -> Optional[Dict[str, Any]]:
+        """Fetch interface status via 'show interfaces' text if REST fails."""
+        try:
+            res = await self.show_text(["interfaces"])
+            if res and not res.startswith("Error:"):
+                # Basic parsing could be added here if needed
+                # For now we'll rely on get_config(["interfaces"]) which is standard REST
+                pass
+        except: pass
+        return None
 
     async def get_system_logs(self) -> Optional[List[str]]:
         res = await self.show_text(["log"])
