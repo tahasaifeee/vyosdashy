@@ -523,6 +523,16 @@ export default function RouterDashboard() {
 
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                   <div className="lg:col-span-2 space-y-8">
+                    {/* Protocols Panel - Moved & Adjusted */}
+                    <DashboardCard title="Protocol Control Center">
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
+                        <ProtocolRow label="BGP Routing" active={configStatus?.bgp} detail={`${configStatus?.bgpPeers} Active`} />
+                        <ProtocolRow label="OSPF OSPFv2" active={configStatus?.ospf} detail={`${configStatus?.ospfNeighbors} Neighbors`} />
+                        <ProtocolRow label="IPv4 Firewall" active={configStatus?.firewall} detail={`${configStatus?.fwPolicies} Polices`} />
+                        <ProtocolRow label="WireGuard" active={configStatus?.wireguard} detail={`${configStatus?.wgPeers} Peers`} />
+                      </div>
+                    </DashboardCard>
+
                     {/* Traffic Chart */}
                     <DashboardCard 
                       title="Throughput Monitor (Mbps)" 
